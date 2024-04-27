@@ -31,7 +31,7 @@ class VehicleTracker:
         """Extrapolate the position at target_time given two positions and their times."""
         if time1 == time2:
             return pos1  # Avoid division by zero if times are the same
-        ratio = (target_time - time1).seconds / (time2 - time1).seconds
+        ratio = (target_time - time1).total_seconds() / (time2 - time1).total_seconds()
         new_y = pos1.northing + (pos2.northing - pos1.northing) * ratio
         new_x = pos1.easting + (pos2.easting - pos1.easting) * ratio
         return models.UTMPosition(northing=new_y, easting=new_x)
@@ -46,7 +46,7 @@ class VehicleTracker:
         # Check both active and passed vehicles for potential updates
         for vehicle_id, vehicle_data in self.active_vehicles.copy().items():
             last_update_time = vehicle_data.vehicle_path[-1].timestamp
-            if (timestamp - last_update_time).seconds > self.inactive_time_threshold:
+            if (timestamp - last_update_time).total_seconds() > self.inactive_time_threshold:
                 if vehicle_id in self.active_vehicles:
                     self.passed_vehicles[vehicle_id] = self.active_vehicles.pop(
                         vehicle_id
@@ -57,7 +57,9 @@ class VehicleTracker:
                 continue
 
             for i, entry in enumerate(vehicle_data.vehicle_path):
-                time_diff = abs((entry.timestamp - timestamp).seconds)
+                time_diff = abs((entry.timestamp - timestamp).total_seconds())
+                if time_diff > 0:
+                    pass
                 if time_diff < self.max_time_gap:
                     if i > 0:
                         max_distance = self.max_distance
