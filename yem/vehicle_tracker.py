@@ -1,5 +1,7 @@
 import math
 from datetime import datetime
+
+from pydantic import MongoDsn
 from pymongo.collection import Collection
 import pymongo
 
@@ -9,17 +11,17 @@ from yem import models
 class VehicleTracker:
     def __init__(
         self,
-        mongo_uri="mongodb://localhost:27017/",
-        database_name="vehicle_tracking",
+        mongo_uri: str | MongoDsn = "mongodb://localhost:27017/",
+        database_name: str = "vehicle_tracking",
         max_distance=2,
         max_distance_new=5,
         max_time_gap=0.2,
         inactive_time_threshold=0.5,
     ):
-        self.client = pymongo.MongoClient(mongo_uri)
+        self.client = pymongo.MongoClient(str(mongo_uri))
         self.db = self.client[database_name]
-        self.active_vehicles: Collection = self.db['active_vehicles']
-        self.passed_vehicles: Collection = self.db['passed_vehicles']
+        self.active_vehicles: Collection = self.db["active_vehicles"]
+        self.passed_vehicles: Collection = self.db["passed_vehicles"]
         self.vehicle_id_counter = self.get_next_vehicle_id()
         self.max_distance = max_distance
         self.max_distance_new = max_distance_new
@@ -28,11 +30,13 @@ class VehicleTracker:
 
     def get_next_vehicle_id(self):
         """Retrieve the next available vehicle ID from the database."""
-        max_id = self.active_vehicles.find_one(sort=[("vehicle_id", -1)], projection={"vehicle_id": 1})
+        max_id = self.active_vehicles.find_one(
+            sort=[("vehicle_id", -1)], projection={"vehicle_id": 1}
+        )
         if max_id is None:
             return 1
         else:
-            return max_id['vehicle_id'] + 1
+            return max_id["vehicle_id"] + 1
 
     @staticmethod
     def extrapolate_position(
@@ -61,9 +65,11 @@ class VehicleTracker:
             vehicle_data = models.TrackedVehicle(**vehicle_record)
             vehicle_id = vehicle_data.vehicle_id
             last_update_time = vehicle_data.vehicle_path[-1].timestamp
-            if (timestamp - last_update_time).total_seconds() > self.inactive_time_threshold:
+            if (
+                timestamp - last_update_time
+            ).total_seconds() > self.inactive_time_threshold:
                 self.passed_vehicles.insert_one(vehicle_data.model_dump())
-                self.active_vehicles.delete_one({'vehicle_id': vehicle_id})
+                self.active_vehicles.delete_one({"vehicle_id": vehicle_id})
                 continue
 
             for i, entry in enumerate(vehicle_data.vehicle_path):
@@ -91,27 +97,32 @@ class VehicleTracker:
         # Create new vehicle record if no suitable track is found
         if best_id is None:
             best_id = self.vehicle_id_counter
-            self.active_vehicles.insert_one({
-                'vehicle_id': best_id,
-                'vehicle_class': class_id,
-                'vehicle_path': [],
-                'status': models.TrackedVehicleStatus.ACTIVE,
-            })
+            self.active_vehicles.insert_one(
+                {
+                    "vehicle_id": best_id,
+                    "vehicle_class": class_id,
+                    "vehicle_path": [],
+                    "status": models.TrackedVehicleStatus.ACTIVE,
+                }
+            )
             self.vehicle_id_counter += 1
 
         # Append new position to the path of the identified vehicle
         self.active_vehicles.update_one(
-            {'vehicle_id': best_id},
-            {'$push': {'vehicle_path': {'timestamp': timestamp, 'position': data.position}}}
+            {"vehicle_id": best_id},
+            {
+                "$push": {
+                    "vehicle_path": {"timestamp": timestamp, "position": data.position}
+                }
+            },
         )
 
     def get_vehicle_data(self, min_path_points=5) -> list[models.TrackedVehicle]:
         result = []
         for vehicle_data in self.active_vehicles.find():
-            if len(vehicle_data['vehicle_path']) > min_path_points:
+            if len(vehicle_data["vehicle_path"]) > min_path_points:
                 result.append(models.TrackedVehicle(**vehicle_data))
         for vehicle_data in self.passed_vehicles.find():
-            if len(vehicle_data['vehicle_path']) > min_path_points:
+            if len(vehicle_data["vehicle_path"]) > min_path_points:
                 result.append(models.TrackedVehicle(**vehicle_data))
         return result
-

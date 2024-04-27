@@ -1,4 +1,4 @@
-.PHONY: init frontend all clean test
+.PHONY: init frontend run-consumer all clean test
 
 
 init:
@@ -7,3 +7,6 @@ init:
 
 frontend:
 	poetry run streamlit run yem/frontend/main.py --server.runOnSave true
+
+run-consumer:
+	python yem/consumer.py
