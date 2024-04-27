@@ -44,7 +44,7 @@ class VehicleTracker:
         min_time_distance = float("inf")
 
         # Check both active and passed vehicles for potential updates
-        for vehicle_id, vehicle_data in self.active_vehicles.items():
+        for vehicle_id, vehicle_data in self.active_vehicles.copy().items():
             last_update_time = vehicle_data.vehicle_path[-1].timestamp
             if (timestamp - last_update_time).seconds > self.inactive_time_threshold:
                 if vehicle_id in self.active_vehicles:
