@@ -36,8 +36,12 @@ ax.set_ylabel('Northing (m)')
 vehicle_plots = {}
 color_map = ListedColormap(plt.cm.get_cmap('tab20').colors)  # Using 'tab20' colormap for distinct colors
 
-
+iterv = 0
 def update_plot(vehicle_data):
+    global iterv
+    iterv += 1
+    if iterv%100!=0:
+        return
     for vehicle in vehicle_data:
         vehicle_info = json.loads(vehicle)
         vehicle_id = vehicle_info['vehicle_id']
@@ -56,7 +60,7 @@ def update_plot(vehicle_data):
 
     plt.legend()
     plt.draw()
-    plt.pause(0.01)
+    plt.pause(0.1)
 
 
 try:
