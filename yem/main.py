@@ -1,5 +1,4 @@
 from confluent_kafka import Consumer, KafkaError
-from pymongo import MongoClient
 import json
 
 # Configuration for Kafka Consumer

@@ -11,7 +11,7 @@ tracker = VehicleTracker()
 # Configuration for Kafka Consumer
 kafka_config = {
     "bootstrap.servers": "hack.invian.ru:9094",
-    "group.id": "yem1",
+    "group.id": "yem2",
     "auto.offset.reset": "earliest",
 }
 
