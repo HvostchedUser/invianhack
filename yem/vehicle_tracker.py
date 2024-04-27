@@ -46,7 +46,9 @@ class VehicleTracker:
         # Check both active and passed vehicles for potential updates
         for vehicle_id, vehicle_data in self.active_vehicles.copy().items():
             last_update_time = vehicle_data.vehicle_path[-1].timestamp
-            if (timestamp - last_update_time).total_seconds() > self.inactive_time_threshold:
+            if (
+                timestamp - last_update_time
+            ).total_seconds() > self.inactive_time_threshold:
                 if vehicle_id in self.active_vehicles:
                     self.passed_vehicles[vehicle_id] = self.active_vehicles.pop(
                         vehicle_id

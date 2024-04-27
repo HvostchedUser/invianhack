@@ -22,8 +22,8 @@ consumer.subscribe(["aboba"])
 # Initial coordinates and plot setup
 central_y = 6184907.837245346 + 30
 central_x = 389832.830408114 + 30
-xlim = (central_x-30, central_x+30)  # 1000 meter buffer around the central point
-ylim = (central_y-30, central_y+30)
+xlim = (central_x - 30, central_x + 30)  # 1000 meter buffer around the central point
+ylim = (central_y - 30, central_y + 30)
 
 plt.ion()  # Turn the interactive mode on for real-time updates
 fig, ax = plt.subplots()
