@@ -2,7 +2,7 @@ import json
 import math
 
 class VehicleTracker:
-    def __init__(self, max_distance=0.05, max_time_gap=1000, inactive_time_threshold=5000):
+    def __init__(self, max_distance=3, max_time_gap=1000, inactive_time_threshold=5000):
         self.active_vehicles = {}
         self.passed_vehicles = {}
         self.vehicle_id_counter = 1
@@ -29,7 +29,7 @@ class VehicleTracker:
         class_id = data['class']
 
         best_id = None
-        min_distance = float('inf')
+        min_time_distance = float('inf')
 
         # Check both active and passed vehicles for potential updates
         for vehicle_dict in [self.active_vehicles, self.passed_vehicles]:
@@ -55,8 +55,8 @@ class VehicleTracker:
                             extrapolated_pos = entry['center']
 
                         dist = self.distance(extrapolated_pos, center)
-                        if dist < min_distance and dist*time_diff/1000 < self.max_distance:
-                            min_distance = dist
+                        if time_diff < min_time_distance and dist < self.max_distance:
+                            min_time_distance = dist
                             best_id = vehicle_id
 
         # Create new vehicle record if no suitable track is found
