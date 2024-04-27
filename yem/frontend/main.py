@@ -13,8 +13,6 @@ vehicles = tracker.get_vehicle_data()
 
 data = [v.vehicle_path[-1].position.to_global_position() for v in vehicles]
 
-data = [pos.to_global_position()]
-
 data = [(p.lat, p.lon) for p in data]
 
 st.sidebar.image("./static/logo.svg")

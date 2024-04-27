@@ -64,12 +64,10 @@ class VehicleTracker:
         for vehicle_record in self.active_vehicles.find():
             vehicle_data = models.TrackedVehicle(**vehicle_record)
             vehicle_id = vehicle_data.vehicle_id
-            last_update_time = vehicle_data.vehicle_path[-1].timestamp
             if (
-                timestamp - last_update_time
+                timestamp - vehicle_data.last_update_time
             ).total_seconds() > self.inactive_time_threshold:
-                self.passed_vehicles.insert_one(vehicle_data.model_dump())
-                self.active_vehicles.delete_one({"vehicle_id": vehicle_id})
+                self._move_to_passed(vehicle_data)
                 continue
 
             for i, entry in enumerate(vehicle_data.vehicle_path):
@@ -117,12 +115,27 @@ class VehicleTracker:
             },
         )
 
-    def get_vehicle_data(self, min_path_points=5) -> list[models.TrackedVehicle]:
+    def get_vehicle_data(
+        self, min_path_points=5, return_passed: bool = False
+    ) -> list[models.TrackedVehicle]:
         result = []
-        for vehicle_data in self.active_vehicles.find():
-            if len(vehicle_data["vehicle_path"]) > min_path_points:
-                result.append(models.TrackedVehicle(**vehicle_data))
-        for vehicle_data in self.passed_vehicles.find():
-            if len(vehicle_data["vehicle_path"]) > min_path_points:
-                result.append(models.TrackedVehicle(**vehicle_data))
+        for vehicle_record in self.active_vehicles.find():
+            vehicle_data = models.TrackedVehicle(**vehicle_record)
+            if (
+                datetime.utcnow() - vehicle_data.last_update_time
+            ).total_seconds() > self.inactive_time_threshold * 3:
+                self._move_to_passed(vehicle_data)
+                continue
+            if len(vehicle_data.vehicle_path) > min_path_points:
+                result.append(vehicle_data)
+        if return_passed:
+            for vehicle_data in self.passed_vehicles.find():
+                if len(vehicle_data["vehicle_path"]) > min_path_points:
+                    result.append(models.TrackedVehicle(**vehicle_data))
         return result
+
+    def _move_to_passed(self, vehicle_data: models.TrackedVehicle) -> None:
+        with self.client.start_session() as session:
+            with session.start_transaction():
+                self.passed_vehicles.insert_one(vehicle_data.model_dump())
+                self.active_vehicles.delete_one({"vehicle_id": vehicle_data.vehicle_id})

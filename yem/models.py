@@ -140,3 +140,7 @@ class TrackedVehicle(BaseModel):
     vehicle_class: VehicleType
     vehicle_path: list[TrackedPosition]
     status: TrackedVehicleStatus
+
+    @property
+    def last_update_time(self) -> datetime | None:
+        return self.vehicle_path[-1].timestamp if self.vehicle_path else None
