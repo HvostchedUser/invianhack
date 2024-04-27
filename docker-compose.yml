@@ -3,10 +3,12 @@ services:
     image: mongo:latest
     ports:
       - "27017:27017"
+    volumes:
+      - mongo-db:/data/db
 
   frontend:
     build: .
-    command: ["make", "frontend"]
+    command: [ "make", "frontend" ]
     ports:
       - "8501:8501"
     depends_on:
@@ -16,8 +18,11 @@ services:
 
   consumer:
     build: .
-    command: ["make", "run-consumer"]
+    command: [ "make", "run-consumer" ]
     depends_on:
       - mongo
     environment:
       MONGO_URI: mongodb://mongo:27017
+
+volumes:
+  mongo-db: { }

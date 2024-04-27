@@ -5,13 +5,17 @@ import streamlit as st
 from streamlit_folium import st_folium
 
 from yem.consumer import tracker
-from yem.models import UTMPosition
+from yem.models import UTMPosition, TrackedVehicleStatus
 
 pos = UTMPosition(easting=389884.6097074643, northing=6184918.59105394)
 
 vehicles = tracker.get_vehicle_data()
 
-data = [v.vehicle_path[-1].position.to_global_position() for v in vehicles]
+data = [
+    v.vehicle_path[-1].position.to_global_position()
+    for v in vehicles
+    if v.status == TrackedVehicleStatus.ACTIVE
+]
 
 data = [(p.lat, p.lon) for p in data]
 
@@ -28,8 +32,13 @@ earth_map = folium.Map()
 
 fg = folium.FeatureGroup(name="Autobots")
 
+ROOT_VIEW = (55.79728057677817, 49.24356827846827)
+
 earth_map.fit_bounds(
-    [(data[0][0] - ZOOM, data[0][1] - ZOOM), (data[0][0] + ZOOM, data[0][1] + ZOOM)]
+    [
+        (ROOT_VIEW[0] - ZOOM, ROOT_VIEW[1] - ZOOM),
+        (ROOT_VIEW[0] + ZOOM, ROOT_VIEW[1] + ZOOM),
+    ]
 )
 
 for coords in data:
