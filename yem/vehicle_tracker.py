@@ -116,13 +116,14 @@ class VehicleTracker:
         )
 
     def get_vehicle_data(
-        self, min_path_points=5, return_passed: bool = False
+        self, min_path_points=5, return_passed: bool = False, prune_old: bool = False
     ) -> list[models.TrackedVehicle]:
         result = []
         for vehicle_record in self.active_vehicles.find():
             vehicle_data = models.TrackedVehicle(**vehicle_record)
             if (
-                vehicle_data.last_update_time is not None
+                prune_old
+                and vehicle_data.last_update_time is not None
                 and (datetime.utcnow() - vehicle_data.last_update_time).total_seconds()
                 > self.inactive_time_threshold * 10
             ):
