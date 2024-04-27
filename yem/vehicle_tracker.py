@@ -122,8 +122,10 @@ class VehicleTracker:
         for vehicle_record in self.active_vehicles.find():
             vehicle_data = models.TrackedVehicle(**vehicle_record)
             if (
-                datetime.utcnow() - vehicle_data.last_update_time
-            ).total_seconds() > self.inactive_time_threshold * 3:
+                vehicle_data.last_update_time is not None
+                and (datetime.utcnow() - vehicle_data.last_update_time).total_seconds()
+                > self.inactive_time_threshold * 10
+            ):
                 self._move_to_passed(vehicle_data)
                 continue
             if len(vehicle_data.vehicle_path) > min_path_points:
