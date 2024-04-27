@@ -6,7 +6,7 @@ init:
 	pre-commit install
 
 frontend:
-	poetry run streamlit run yem/frontend/main.py --server.runOnSave true
+	poetry run streamlit run yem/frontend/main.py
 
 run-consumer:
 	python yem/consumer.py

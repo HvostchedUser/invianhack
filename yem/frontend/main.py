@@ -4,9 +4,14 @@ import folium
 import streamlit as st
 from streamlit_folium import st_folium
 
+from yem.consumer import tracker
 from yem.models import UTMPosition
 
 pos = UTMPosition(easting=389884.6097074643, northing=6184918.59105394)
+
+vehicles = tracker.get_vehicle_data()
+
+data = [v.vehicle_path[-1].position.to_global_position() for v in vehicles]
 
 data = [pos.to_global_position()]
 

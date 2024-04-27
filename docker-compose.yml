@@ -7,6 +7,8 @@ services:
   frontend:
     build: .
     command: ["make", "frontend"]
+    ports:
+      - "8501:8501"
     depends_on:
       - mongo
     environment:

@@ -2,7 +2,7 @@ import logging
 
 from confluent_kafka import Consumer, KafkaError
 import json
-from vehicle_tracker import VehicleTracker
+from yem.vehicle_tracker import VehicleTracker
 from yem import models
 from yem.settings.mongo import mongo_settings
 from yem.settings.kafka import kafka_settings

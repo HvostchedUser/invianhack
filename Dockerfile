@@ -18,4 +18,5 @@ COPY poetry.lock pyproject.toml makefile /code/
 
 RUN poetry install $(test "$YOUR_ENV" == production && echo "--only=main") --no-interaction --no-ansi
 
+COPY static /code/static
 COPY ./yem /code/yem
