@@ -19,7 +19,9 @@ class UTMPosition(NamedTuple):
     northing: UTMCoordinate
     easting: UTMCoordinate
 
-    def to_global_position(self, zone: int = 39, northern_hemisphere=True) -> GlobalPosition:
+    def to_global_position(
+        self, zone: int = 39, northern_hemisphere=True
+    ) -> GlobalPosition:
         """Source: https://stackoverflow.com/a/344083"""
         northing = self.northing
         easting = self.easting
