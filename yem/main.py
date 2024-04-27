@@ -5,7 +5,7 @@ import json
 # Configuration for Kafka Consumer
 kafka_config = {
     'bootstrap.servers': 'hack.invian.ru:9094',
-    'group.id': 'yem',  # replace 'your_team_id' with your actual team ID
+    'group.id': 'yem22',  # replace 'your_team_id' with your actual team ID
     'auto.offset.reset': 'earliest'
 }
 # Create Kafka consumer
