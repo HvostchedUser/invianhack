@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import IntEnum, StrEnum
-from typing import Annotated, NewType
+from typing import Annotated, NewType, NamedTuple
 
 from annotated_types import Ge, Le
 from pydantic import BaseModel, Field
@@ -8,6 +8,11 @@ from pydantic import BaseModel, Field
 UTMCoordinate = Annotated[float, Ge(0)]
 GlobalCoordinate = Annotated[float, Ge(-180), Le(180)]
 VehicleID = NewType("VehicleID", int)
+
+
+class UTMPosition(NamedTuple):
+    y: UTMCoordinate
+    x: UTMCoordinate
 
 
 class TrackedVehicleStatus(StrEnum):
@@ -26,7 +31,7 @@ class VehicleType(IntEnum):
 
 class TrafficMessage(BaseModel):
     unix_millis: datetime
-    center: tuple[UTMCoordinate, UTMCoordinate]
+    center: UTMPosition
     class_: VehicleType = Field(alias="class")
 
 
