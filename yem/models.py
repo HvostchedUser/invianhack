@@ -1,6 +1,7 @@
 import math
 from datetime import datetime
 from enum import IntEnum, StrEnum
+from types import MappingProxyType
 from typing import Annotated, NewType, NamedTuple
 
 from annotated_types import Ge, Le
@@ -122,6 +123,18 @@ class VehicleType(IntEnum):
     TRUCK = 3
     ROAD_TRAIN = 4
     BUS = 5
+
+
+VEHICLE_TYPE_TO_ICON = MappingProxyType(
+    {
+        VehicleType.MOTORCYCLE: "motorcycle",
+        VehicleType.CAR: "car",
+        VehicleType.CAR_WITH_TRAILER: "trailer",
+        VehicleType.TRUCK: "truck",
+        VehicleType.ROAD_TRAIN: "truck-moving",
+        VehicleType.BUS: "bus",
+    }
+)
 
 
 class TrafficMessage(BaseModel):

@@ -119,7 +119,8 @@ class VehicleTracker:
         self, min_path_points=5, return_passed: bool = False, prune_old: bool = False
     ) -> list[models.TrackedVehicle]:
         result = []
-        for vehicle_record in self.active_vehicles.find():
+        filter_find = {}
+        for vehicle_record in self.active_vehicles.find(filter=filter_find, limit=50):
             vehicle_data = models.TrackedVehicle(**vehicle_record)
             if (
                 prune_old
@@ -132,7 +133,7 @@ class VehicleTracker:
             if len(vehicle_data.vehicle_path) > min_path_points:
                 result.append(vehicle_data)
         if return_passed:
-            for vehicle_data in self.passed_vehicles.find():
+            for vehicle_data in self.passed_vehicles.find(limit=50, filter=filter_find):
                 if len(vehicle_data["vehicle_path"]) > min_path_points:
                     result.append(models.TrackedVehicle(**vehicle_data))
         return result
