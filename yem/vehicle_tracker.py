@@ -6,6 +6,7 @@ from pymongo.collection import Collection
 import pymongo
 
 from yem import models
+from yem.models import nearest_lane
 
 
 class VehicleTracker:
@@ -88,6 +89,9 @@ class VehicleTracker:
                 and (timestamp - vehicle_data.last_update_time).total_seconds()
                 > self.inactive_time_threshold
             ):
+                vehicle_data.output_lane = nearest_lane(
+                    vehicle_data.vehicle_path[-1].position
+                )
                 self._move_to_passed(vehicle_data)
                 continue
 
@@ -122,6 +126,7 @@ class VehicleTracker:
                     "vehicle_class": class_id,
                     "vehicle_path": [],
                     "status": models.TrackedVehicleStatus.ACTIVE,
+                    "input_lane": nearest_lane(data.position),
                 }
             )
             self.vehicle_id_counter += 1

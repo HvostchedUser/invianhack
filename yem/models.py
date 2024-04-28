@@ -160,6 +160,17 @@ class JunctionOutputLane(StrEnum):
     SOUTH = "south"
 
 
+LANE_POINTS = {
+    UTMPosition(northing=6184968.86, easting=389909.58): "east",
+    UTMPosition(northing=6184928.33, easting=389821.43): "west",
+    UTMPosition(northing=6184908.56, easting=389885.40): "south",
+}
+
+
+def nearest_lane(position: UTMPosition) -> str:
+    return LANE_POINTS[min(LANE_POINTS, key=lambda x: math.dist(x, position))]
+
+
 class TrackedVehicle(BaseModel):
     vehicle_id: VehicleID
     vehicle_class: VehicleType
