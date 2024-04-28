@@ -1,6 +1,4 @@
-Below is a detailed README template for your hackathon project repository that encompasses a comprehensive overview of the project, its setup, usage, and other essential details. This template assumes that your project involves visualizing traffic data collected from cameras at traffic intersections, tracking vehicles, calculating metrics like average speed, and presenting these data visually.
 
----
 
 # Traffic Monitoring and Visualization System
 
@@ -49,22 +47,8 @@ After deployment, the system will automatically begin processing data from prede
 
 - **URL**: `http://localhost:8501/` 
 
-### API Usage
-
-If applicable, describe how to interact with the system through API endpoints.
-
-## Contributing
-
-Interested in contributing to the Traffic Monitoring and Visualization System? Please read through our contributing guidelines. We appreciate your input!
 
 ## Support and Feedback
 
 For bugs, issues, or feature requests, please file an issue through the GitHub Issues section of this repository.
 
-## License
-
-This project is licensed under the [MIT License](LICENSE.md) - see the LICENSE file for details.
-
----
-
-Make sure to adjust the URLs, installation instructions, and descriptions according to your specific project details and repository structure. This README provides a clear, structured overview of your project, making it easier for other hackathon participants and judges to understand and evaluate your work.
