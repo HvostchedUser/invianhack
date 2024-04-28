@@ -65,8 +65,10 @@ class VehicleTracker:
             vehicle_data = models.TrackedVehicle(**vehicle_record)
             vehicle_id = vehicle_data.vehicle_id
             if (
-                timestamp - vehicle_data.last_update_time
-            ).total_seconds() > self.inactive_time_threshold:
+                vehicle_data.last_update_time is not None
+                and (timestamp - vehicle_data.last_update_time).total_seconds()
+                > self.inactive_time_threshold
+            ):
                 self._move_to_passed(vehicle_data)
                 continue
 
