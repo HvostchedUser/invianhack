@@ -1,4 +1,5 @@
 import math
+from collections import defaultdict
 from datetime import datetime
 from enum import IntEnum, StrEnum
 from types import MappingProxyType
@@ -181,4 +182,29 @@ class TrackedVehicle(BaseModel):
 
     @property
     def last_update_time(self) -> datetime | None:
-        return self.vehicle_path[-1].timestamp if self.vehicle_path else None
+        return self.sorted_vehicle_path[-1].timestamp if self.vehicle_path else None
+
+    @property
+    def sorted_vehicle_path(self) -> list[TrackedPosition]:
+        return sorted(self.vehicle_path, key=lambda p: p.timestamp)
+
+    def aggregate_speed(self, use_last_n_points: int = 10) -> float:
+        """Return average speed in km/h"""
+        if not self.vehicle_path:
+            return 0
+        speeds = []
+        sorted_path = self.sorted_vehicle_path
+        for prev_p, next_p in zip(
+            sorted_path[-use_last_n_points - 1 : -1], sorted_path[-use_last_n_points:]
+        ):
+            dist = math.dist(prev_p.position, next_p.position)
+            time = (next_p.timestamp - prev_p.timestamp).total_seconds()
+            speeds.append(dist / time if time > 0 else 0)
+        if not speeds:
+            return 0
+        return sum(speeds) / len(speeds) * 3.6
+
+
+class LaneStats(BaseModel):
+    vehicle_count: defaultdict[VehicleType, int] = defaultdict(int)
+    average_speed: defaultdict[VehicleType, float] = defaultdict(float)

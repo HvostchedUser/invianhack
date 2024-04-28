@@ -1,3 +1,6 @@
+import logging
+from datetime import timedelta
+
 from confluent_kafka import Consumer, KafkaError
 import json
 import matplotlib.pyplot as plt
@@ -85,13 +88,14 @@ try:
 
         data = models.TrafficMessage(**json.loads(msg.value().decode("utf-8")))
         tracker.add_message(data)
-        vehicle_data = tracker.get_vehicle_data()
-        update_plot(vehicle_data)
+        logging.error(tracker.get_lane_stats(timedelta(seconds=5), [0, 1, 2, 3, 4, 5]))
+        # vehicle_data = tracker.get_vehicle_data()
+        # update_plot(vehicle_data)
 
 except KeyboardInterrupt:
     print("Stopped by the user.")
 
 finally:
     consumer.close()
-    plt.ioff()  # Turn off interactive plotting
-    plt.show()  # Ensure window stays open after the loop ends
+    # plt.ioff()  # Turn off interactive plotting
+    # plt.show()  # Ensure window stays open after the loop ends

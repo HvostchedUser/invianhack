@@ -1,5 +1,6 @@
 import math
-from datetime import datetime
+from collections import defaultdict
+from datetime import datetime, timedelta
 
 from pydantic import MongoDsn, parse_obj_as
 from pymongo.collection import Collection
@@ -23,6 +24,7 @@ class VehicleTracker:
         self.db = self.client[database_name]
         self.active_vehicles: Collection = self.db["active_vehicles"]
         self.passed_vehicles: Collection = self.db["passed_vehicles"]
+        self.lane_stats: Collection = self.db["lane_stats"]
         self.vehicle_id_counter = self.get_next_vehicle_id()
         self.max_distance = max_distance
         self.max_distance_new = max_distance_new
@@ -89,9 +91,9 @@ class VehicleTracker:
                 and (timestamp - vehicle_data.last_update_time).total_seconds()
                 > self.inactive_time_threshold
             ):
-                vehicle_data.output_lane = nearest_lane(
-                    vehicle_data.vehicle_path[-1].position
-                )
+                direction = nearest_lane(vehicle_data.vehicle_path[-1].position)
+                vehicle_data.output_lane = direction
+                self._upd_lane_stats(vehicle_data, direction)
                 self._move_to_passed(vehicle_data)
                 continue
 
@@ -171,3 +173,47 @@ class VehicleTracker:
             with session.start_transaction():
                 self.passed_vehicles.insert_one(vehicle_data.model_dump())
                 self.active_vehicles.delete_one({"vehicle_id": vehicle_data.vehicle_id})
+
+    def _upd_lane_stats(
+        self,
+        vehicle_data: models.TrackedVehicle,
+        direction: models.JunctionOutputLane | str,
+    ) -> None:
+        vehicle_type = vehicle_data.vehicle_class
+        vehicle_speed = vehicle_data.aggregate_speed()
+        timestamp = vehicle_data.last_update_time
+
+        self.lane_stats.update_one(
+            {"type": vehicle_type, "direction": direction, "timestamp": timestamp},
+            {"$inc": {"total_speed": vehicle_speed, "count": 1}},
+            upsert=True,
+        )
+
+    def get_lane_stats(
+        self, return_for: timedelta, vehicle_types: list[models.VehicleType]
+    ) -> dict[models.JunctionOutputLane, models.LaneStats]:
+        """Returns stats for period [last_update_time - return_for, last_update_time]"""
+        end_time = self.get_latest_timestamp()
+        start_time = end_time - return_for
+        pipeline = [
+            {
+                "$match": {
+                    "timestamp": {"$gte": start_time, "$lt": end_time},
+                    "type": {"$in": vehicle_types},
+                }
+            },
+            {
+                "$group": {
+                    "_id": {"type": "$type", "direction": "$direction"},
+                    "average_speed": {"$avg": {"$divide": ["$total_speed", "$count"]}},
+                    "total_count": {"$sum": "$count"},
+                }
+            },
+        ]
+        result = defaultdict(models.LaneStats)
+        for doc in self.lane_stats.aggregate(pipeline):
+            direction = doc["_id"]["direction"]
+            vehicle_type = doc["_id"]["type"]
+            result[direction].vehicle_count[vehicle_type] = doc["total_count"]
+            result[direction].average_speed[vehicle_type] = doc["average_speed"]
+        return result
