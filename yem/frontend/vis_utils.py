@@ -7,7 +7,7 @@ TYPE_COLORS = {
     models.VehicleType.MOTORCYCLE: "red",
     models.VehicleType.CAR: "blue",
     models.VehicleType.CAR_WITH_TRAILER: "green",
-    models.VehicleType.TRUCK: "yellow",
+    models.VehicleType.TRUCK: "grey",
     models.VehicleType.ROAD_TRAIN: "purple",
     models.VehicleType.BUS: "orange",
 }
@@ -20,7 +20,7 @@ def make_bar_chart(
 
     # Base position and dimensions of the bars
     x1 = 0  # Starting x-coordinate
-    x2 = 1  # Width of each bar, ending x-coordinate
+    x2 = scale_factor * 220  # Width of each bar, ending x-coordinate
     y = 0  # Starting y-coordinate for the first bar
 
     # List to hold the rectangles representing the bar chart

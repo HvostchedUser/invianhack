@@ -125,6 +125,18 @@ class VehicleType(IntEnum):
     ROAD_TRAIN = 4
     BUS = 5
 
+    def to_beautiful(self):
+        return self.name.replace("_", " ").lower().capitalize()
+
+    @classmethod
+    def from_beautiful(cls, name):
+        name = name.upper().replace(" ", "_")
+        return cls[name]
+
+    @classmethod
+    def list(cls):
+        return list(map(lambda a: a.to_beautiful(), cls))
+
 
 VEHICLE_TYPE_TO_ICON = MappingProxyType(
     {
@@ -162,9 +174,9 @@ class JunctionOutputLane(StrEnum):
 
 
 LANE_POINTS = {
-    UTMPosition(northing=6184968.86, easting=389909.58): "east",
-    UTMPosition(northing=6184928.33, easting=389821.43): "west",
-    UTMPosition(northing=6184908.56, easting=389885.40): "south",
+    UTMPosition(northing=6184968, easting=389909): "east",
+    UTMPosition(northing=6184908, easting=389821): "west",
+    UTMPosition(northing=6184908, easting=389885): "south",
 }
 
 

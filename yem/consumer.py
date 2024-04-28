@@ -12,15 +12,15 @@ tracker = VehicleTracker(
     mongo_uri=mongo_settings.uri, database_name=mongo_settings.db_name
 )
 
-# Configuration for Kafka Consumer
-kafka_settings.group_id = str(uuid.uuid4())
-kafka_config = kafka_settings.get_config()
-
-# Create Kafka consumer
-consumer = Consumer(kafka_config)
-consumer.subscribe(["aboba"])
-
 if __name__ == "__main__":
+    # Configuration for Kafka Consumer
+    kafka_settings.group_id = str(uuid.uuid4())
+    kafka_config = kafka_settings.get_config()
+
+    # Create Kafka consumer
+    consumer = Consumer(kafka_config)
+    consumer.subscribe(["aboba"])
+
     root = logging.getLogger()
     root.setLevel(logging.INFO)
     try:

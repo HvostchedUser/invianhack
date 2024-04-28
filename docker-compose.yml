@@ -6,15 +6,15 @@ services:
     volumes:
       - mongo-db:/data/db
 
-  frontend:
-    build: .
-    command: [ "make", "frontend" ]
-    ports:
-      - "8501:8501"
-    depends_on:
-      - mongo
-    environment:
-      MONGO_URI: mongodb://mongo:27017
+#  frontend:
+#    build: .
+#    command: [ "make", "frontend" ]
+#    ports:
+#      - "8501:8501"
+#    depends_on:
+#      - mongo
+#    environment:
+#      MONGO_URI: mongodb://mongo:27017
 
   consumer:
     build: .
@@ -23,6 +23,7 @@ services:
       - mongo
     environment:
       MONGO_URI: mongodb://mongo:27017
+    restart: unless-stopped
 
 volumes:
   mongo-db: { }

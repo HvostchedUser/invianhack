@@ -1,9 +1,11 @@
+import random
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class KafkaSettings(BaseSettings):
     server: str = "hack.invian.ru:9094"
-    group_id: str = "yem"
+    group_id: str = f"yem{random.randint(1, 10**10)}"
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="KAFKA_")
 
