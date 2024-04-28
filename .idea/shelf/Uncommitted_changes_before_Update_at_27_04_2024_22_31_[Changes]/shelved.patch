@@ -1,0 +1,41 @@
+Index: makefile
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>.PHONY: init frontend all clean test\r\n\r\n\r\ninit:\r\n\tpoetry install\r\n\tpre-commit install\r\n\r\nfrontend:\r\n\tpoetry run streamlit run yem/frontend/main.py --server.runOnSave true\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/makefile b/makefile
+--- a/makefile	(revision 8efad61980bfaa40f6d12178805a1398ea37f649)
++++ b/makefile	(date 1714246290000)
+@@ -6,4 +6,4 @@
+ 	pre-commit install
+
+ frontend:
+-	poetry run streamlit run yem/frontend/main.py --server.runOnSave true
++	poetry run streamlit run yem/frontend/main.py
+Index: .idea/webServers.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.idea/webServers.xml b/.idea/webServers.xml
+new file mode 100644
+--- /dev/null	(date 1714242976000)
++++ b/.idea/webServers.xml	(date 1714242976000)
+@@ -0,0 +1,14 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<project version="4">
++  <component name="WebServers">
++    <option name="servers">
++      <webServer id="c8be4491-bd2d-47b9-8bc8-8ef87e872a4a" name="innovm">
++        <fileTransfer accessType="SFTP" host="10.90.136.99" port="22" sshConfigId="5b64738a-b677-4481-8d13-33bc2281c148" sshConfig="root@10.90.136.99:22 agent" authAgent="true">
++          <advancedOptions>
++            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
++          </advancedOptions>
++        </fileTransfer>
++      </webServer>
++    </option>
++  </component>
++</project>
+\ No newline at end of file

@@ -1,0 +1,97 @@
+Index: docker-compose.yml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>services:\r\n  mongo:\r\n    image: mongo:latest\r\n    ports:\r\n      - \"27017:27017\"\r\n\r\n  frontend:\r\n    build: .\r\n    command: [\"make\", \"frontend\"]\r\n    ports:\r\n      - \"8501:8501\"\r\n    depends_on:\r\n      - mongo\r\n    environment:\r\n      MONGO_URI: mongodb://mongo:27017\r\n\r\n  consumer:\r\n    build: .\r\n    command: [\"make\", \"run-consumer\"]\r\n    depends_on:\r\n      - mongo\r\n    environment:\r\n      MONGO_URI: mongodb://mongo:27017\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/docker-compose.yml b/docker-compose.yml
+--- a/docker-compose.yml	(revision 0dfbb44df7adf1701c1798b4a80e4bc5ee2d1cb9)
++++ b/docker-compose.yml	(date 1714249370000)
+@@ -3,10 +3,12 @@
+     image: mongo:latest
+     ports:
+       - "27017:27017"
++    volumes:
++      - mongo-db:/data/db
+
+   frontend:
+     build: .
+-    command: ["make", "frontend"]
++    command: [ "make", "frontend" ]
+     ports:
+       - "8501:8501"
+     depends_on:
+@@ -16,8 +18,11 @@
+
+   consumer:
+     build: .
+-    command: ["make", "run-consumer"]
++    command: [ "make", "run-consumer" ]
+     depends_on:
+       - mongo
+     environment:
+       MONGO_URI: mongodb://mongo:27017
++
++volumes:
++  mongo-db: { }
+\ No newline at end of file
+Index: yem/frontend/main.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>import time\r\n\r\nimport folium\r\nimport streamlit as st\r\nfrom streamlit_folium import st_folium\r\n\r\nfrom yem.consumer import tracker\r\nfrom yem.models import UTMPosition\r\n\r\npos = UTMPosition(easting=389884.6097074643, northing=6184918.59105394)\r\n\r\nvehicles = tracker.get_vehicle_data()\r\n\r\ndata = [v.vehicle_path[-1].position.to_global_position() for v in vehicles]\r\n\r\ndata = [pos.to_global_position()]\r\n\r\ndata = [(p.lat, p.lon) for p in data]\r\n\r\nst.sidebar.image(\"./static/logo.svg\")\r\nwith st.container(border=True):\r\n    st.image(\"https://upload.wikimedia.org/wikipedia/commons/f/fd/ABOBA.jpg\")\r\n\r\nZOOM = 0.001\r\n\r\nst.header(f\"Aboba {time.time()}\")\r\n# st.image(\"https://upload.wikimedia.org/wikipedia/commons/f/fd/ABOBA.jpg\")\r\n\r\nearth_map = folium.Map()\r\n\r\nfg = folium.FeatureGroup(name=\"Autobots\")\r\n\r\nearth_map.fit_bounds(\r\n    [(data[0][0] - ZOOM, data[0][1] - ZOOM), (data[0][0] + ZOOM, data[0][1] + ZOOM)]\r\n)\r\n\r\nfor coords in data:\r\n    fg.add_child(folium.CircleMarker(coords, radius=3))\r\n\r\nst_folium(earth_map, feature_group_to_add=fg, height=700, width=700)\r\n\r\nif \"sleep_time\" not in st.session_state:\r\n    st.session_state.sleep_time = 2\r\n\r\nif \"auto_refresh\" not in st.session_state:\r\n    st.session_state.auto_refresh = True\r\n\r\nauto_refresh = st.sidebar.checkbox(\"Auto Refresh?\", st.session_state.auto_refresh)\r\n\r\nif auto_refresh:\r\n    number = st.sidebar.number_input(\r\n        \"Refresh rate in seconds\", value=st.session_state.sleep_time\r\n    )\r\n    st.session_state.sleep_time = number\r\n    time.sleep(number)\r\n    st.rerun()\r\n\r\n# st.write(styler)\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/yem/frontend/main.py b/yem/frontend/main.py
+--- a/yem/frontend/main.py	(revision 0dfbb44df7adf1701c1798b4a80e4bc5ee2d1cb9)
++++ b/yem/frontend/main.py	(date 1714249682000)
+@@ -5,15 +5,13 @@
+ from streamlit_folium import st_folium
+
+ from yem.consumer import tracker
+-from yem.models import UTMPosition
++from yem.models import UTMPosition, TrackedVehicleStatus
+
+ pos = UTMPosition(easting=389884.6097074643, northing=6184918.59105394)
+
+ vehicles = tracker.get_vehicle_data()
+
+-data = [v.vehicle_path[-1].position.to_global_position() for v in vehicles]
+-
+-data = [pos.to_global_position()]
++data = [v.vehicle_path[-1].position.to_global_position() for v in vehicles if v.status == TrackedVehicleStatus.ACTIVE]
+
+ data = [(p.lat, p.lon) for p in data]
+
+@@ -30,8 +28,10 @@
+
+ fg = folium.FeatureGroup(name="Autobots")
+
++ROOT_VIEW = (55.79728057677817, 49.24356827846827)
++
+ earth_map.fit_bounds(
+-    [(data[0][0] - ZOOM, data[0][1] - ZOOM), (data[0][0] + ZOOM, data[0][1] + ZOOM)]
++    [(ROOT_VIEW[0] - ZOOM, ROOT_VIEW[1] - ZOOM), (ROOT_VIEW[0] + ZOOM, ROOT_VIEW[1] + ZOOM)]
+ )
+
+ for coords in data:
+Index: yem/settings/kafka.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>from pydantic_settings import BaseSettings, SettingsConfigDict\r\n\r\n\r\nclass KafkaSettings(BaseSettings):\r\n    server: str = \"hack.invian.ru:9094\"\r\n    group_id: str = \"yem\"\r\n\r\n    model_config = SettingsConfigDict(env_file=\".env\", env_prefix=\"KAFKA_\")\r\n\r\n    def get_config(self) -> dict[str, str]:\r\n        return {\r\n            \"bootstrap.servers\": self.server,\r\n            \"group.id\": self.group_id,\r\n            \"auto.offset.reset\": \"earliest\",\r\n        }\r\n\r\n\r\nkafka_settings = KafkaSettings()\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/yem/settings/kafka.py b/yem/settings/kafka.py
+--- a/yem/settings/kafka.py	(revision 0dfbb44df7adf1701c1798b4a80e4bc5ee2d1cb9)
++++ b/yem/settings/kafka.py	(date 1714247934000)
+@@ -3,7 +3,7 @@
+
+ class KafkaSettings(BaseSettings):
+     server: str = "hack.invian.ru:9094"
+-    group_id: str = "yem"
++    group_id: str = "yem44"
+
+     model_config = SettingsConfigDict(env_file=".env", env_prefix="KAFKA_")
+

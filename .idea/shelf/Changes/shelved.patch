@@ -1,0 +1,250 @@
+Index: yem/frontend/main.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>import time\r\n\r\nimport folium\r\nimport streamlit as st\r\nfrom streamlit_folium import st_folium\r\n\r\nfrom yem.models import UTMPosition\r\n\r\npos = UTMPosition(easting=389884.6097074643, northing=6184918.59105394)\r\n\r\ndata = [pos.to_global_position()]\r\n\r\ndata = [(p.lat, p.lon) for p in data]\r\n\r\nst.sidebar.image(\"./static/logo.svg\")\r\nwith st.container(border=True):\r\n    st.image(\"https://upload.wikimedia.org/wikipedia/commons/f/fd/ABOBA.jpg\")\r\n\r\nZOOM = 0.001\r\n\r\nst.header(f\"Aboba {time.time()}\")\r\n# st.image(\"https://upload.wikimedia.org/wikipedia/commons/f/fd/ABOBA.jpg\")\r\n\r\nearth_map = folium.Map()\r\n\r\nfg = folium.FeatureGroup(name=\"Autobots\")\r\n\r\nearth_map.fit_bounds(\r\n    [(data[0][0] - ZOOM, data[0][1] - ZOOM), (data[0][0] + ZOOM, data[0][1] + ZOOM)]\r\n)\r\n\r\nfor coords in data:\r\n    fg.add_child(folium.CircleMarker(coords, radius=3))\r\n\r\nst_folium(earth_map, feature_group_to_add=fg, height=700, width=700)\r\n\r\nif \"sleep_time\" not in st.session_state:\r\n    st.session_state.sleep_time = 2\r\n\r\nif \"auto_refresh\" not in st.session_state:\r\n    st.session_state.auto_refresh = True\r\n\r\nauto_refresh = st.sidebar.checkbox(\"Auto Refresh?\", st.session_state.auto_refresh)\r\n\r\nif auto_refresh:\r\n    number = st.sidebar.number_input(\r\n        \"Refresh rate in seconds\", value=st.session_state.sleep_time\r\n    )\r\n    st.session_state.sleep_time = number\r\n    time.sleep(number)\r\n    st.rerun()\r\n\r\n# st.write(styler)\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/yem/frontend/main.py b/yem/frontend/main.py
+--- a/yem/frontend/main.py	(revision 8efad61980bfaa40f6d12178805a1398ea37f649)
++++ b/yem/frontend/main.py	(date 1714246280000)
+@@ -1,53 +1,107 @@
++import json
+ import time
+
+ import folium
+ import streamlit as st
++from confluent_kafka import Consumer
+ from streamlit_folium import st_folium
+
+-from yem.models import UTMPosition
++from yem import models
++from yem.main import kafka_config
++from yem.vehicle_tracker import VehicleTracker
++
++
++@st.cache_data
++def get_tracker():
++    print("CREATE VEHICLE")
++    return VehicleTracker()
++
++
++@st.cache_resource
++def get_consumer() -> Consumer:
++    consumer = Consumer(kafka_config)
++    return consumer
++
++
++def draw(consumer: Consumer, tracker: VehicleTracker):
++    # pos = UTMPosition(easting=389884.6097074643, northing=6184918.59105394)
+
+-pos = UTMPosition(easting=389884.6097074643, northing=6184918.59105394)
++    st.header(f"Aboba {time.time()}")
+
+-data = [pos.to_global_position()]
++    msg = consumer.poll(timeout=1)
++
++    if msg is None:
++        return
++    if msg.error():
++        print(msg.error())
++        return
++
++    data = models.TrafficMessage(**json.loads(msg.value().decode("utf-8")))
++    tracker.add_message(data)
++    vehicles = tracker.get_vehicle_data()
++
++    data = [v.vehicle_path[-1].position.to_global_position() for v in vehicles]
++
++    # data = [pos.to_global_position()]
+
+-data = [(p.lat, p.lon) for p in data]
++    data = [(p.lat, p.lon) for p in data]
+
+-st.sidebar.image("./static/logo.svg")
+-with st.container(border=True):
+-    st.image("https://upload.wikimedia.org/wikipedia/commons/f/fd/ABOBA.jpg")
++    st.sidebar.image("./static/logo.svg")
++    with st.container(border=True):
++        st.image("https://upload.wikimedia.org/wikipedia/commons/f/fd/ABOBA.jpg")
+
+-ZOOM = 0.001
++    ZOOM = 0.001
+
+-st.header(f"Aboba {time.time()}")
+-# st.image("https://upload.wikimedia.org/wikipedia/commons/f/fd/ABOBA.jpg")
++    # st.image("https://upload.wikimedia.org/wikipedia/commons/f/fd/ABOBA.jpg")
+
+-earth_map = folium.Map()
++    earth_map = folium.Map()
+
+-fg = folium.FeatureGroup(name="Autobots")
++    fg = folium.FeatureGroup(name="Autobots")
+
+-earth_map.fit_bounds(
+-    [(data[0][0] - ZOOM, data[0][1] - ZOOM), (data[0][0] + ZOOM, data[0][1] + ZOOM)]
+-)
++    if data:
++        earth_map.fit_bounds(
++            [(data[0][0] - ZOOM, data[0][1] - ZOOM), (data[0][0] + ZOOM, data[0][1] + ZOOM)]
++        )
+
+-for coords in data:
+-    fg.add_child(folium.CircleMarker(coords, radius=3))
++    for coords in data:
++        fg.add_child(folium.CircleMarker(coords, radius=3))
+
+-st_folium(earth_map, feature_group_to_add=fg, height=700, width=700)
++    st_folium(earth_map, feature_group_to_add=fg, height=700, width=700)
+
+-if "sleep_time" not in st.session_state:
+-    st.session_state.sleep_time = 2
++    if "sleep_time" not in st.session_state:
++        st.session_state.sleep_time = 2
+
+-if "auto_refresh" not in st.session_state:
+-    st.session_state.auto_refresh = True
++    if "auto_refresh" not in st.session_state:
++        st.session_state.auto_refresh = False
+
+-auto_refresh = st.sidebar.checkbox("Auto Refresh?", st.session_state.auto_refresh)
++    auto_refresh = st.sidebar.checkbox("Auto Refresh?", st.session_state.auto_refresh)
+
+-if auto_refresh:
+-    number = st.sidebar.number_input(
+-        "Refresh rate in seconds", value=st.session_state.sleep_time
+-    )
+-    st.session_state.sleep_time = number
+-    time.sleep(number)
+-    st.rerun()
++    if auto_refresh:
++        number = st.sidebar.number_input(
++            "Refresh rate in seconds", value=st.session_state.sleep_time
++        )
++        st.session_state.sleep_time = number
++        time.sleep(number)
++        st.rerun()
+
+-# st.write(styler)
++    # st.write(styler)
++
++
++def main():
++    consumer = None
++    try:
++        consumer = get_consumer()
++        tracker = get_tracker()
++        consumer.subscribe(["aboba"])
++
++        for message in consumer:
++            draw(consumer, tracker, message)
++    except KeyboardInterrupt:
++        print("Stopped by the user.")
++    finally:
++        if consumer is not None:
++            consumer.close()
++
++
++if __name__ == '__main__':
++    main()
+Index: yem/main.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>from confluent_kafka import Consumer, KafkaError\r\nimport json\r\n\r\n# Configuration for Kafka Consumer\r\nkafka_config = {\r\n    \"bootstrap.servers\": \"hack.invian.ru:9094\",\r\n    \"group.id\": \"yem22\",  # replace 'your_team_id' with your actual team ID\r\n    \"auto.offset.reset\": \"earliest\",\r\n}\r\n# Create Kafka consumer\r\nconsumer = Consumer(kafka_config)\r\nconsumer.subscribe([\"aboba\"])  # Topic name as provided\r\n\r\ntry:\r\n    while True:\r\n        msg = consumer.poll(timeout=1.0)\r\n        if msg is None:\r\n            print(\"got nothing...\")\r\n            continue\r\n        if msg.error():\r\n            if msg.error().code() == KafkaError._PARTITION_EOF:\r\n                continue  # End of partition event\r\n            else:\r\n                print(msg.error())\r\n                break\r\n        # Convert the message from Kafka to a Python dictionary\r\n        data = json.loads(msg.value().decode(\"utf-8\"))\r\n\r\n        # Convert the dictionary back to a JSON string to print it\r\n        json_data = json.dumps(data, indent=4)\r\n        print(f\"Received JSON data: {json_data}\")\r\n\r\n        # Insert data into MongoDB\r\n        # traffic_data.insert_one(data)\r\n\r\nexcept KeyboardInterrupt:\r\n    print(\"Stopped by the user.\")\r\n\r\nfinally:\r\n    # Close the consumer and MongoDB connection\r\n    consumer.close()\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/yem/main.py b/yem/main.py
+--- a/yem/main.py	(revision 8efad61980bfaa40f6d12178805a1398ea37f649)
++++ b/yem/main.py	(date 1714245530000)
+@@ -1,41 +1,48 @@
+-from confluent_kafka import Consumer, KafkaError
+ import json
+
++from confluent_kafka import Consumer, KafkaError
++
+ # Configuration for Kafka Consumer
+ kafka_config = {
+     "bootstrap.servers": "hack.invian.ru:9094",
+-    "group.id": "yem22",  # replace 'your_team_id' with your actual team ID
++    "group.id": "yem48375",  # replace 'your_team_id' with your actual team ID
+     "auto.offset.reset": "earliest",
+ }
+ # Create Kafka consumer
+ consumer = Consumer(kafka_config)
+ consumer.subscribe(["aboba"])  # Topic name as provided
+
+-try:
+-    while True:
+-        msg = consumer.poll(timeout=1.0)
+-        if msg is None:
+-            print("got nothing...")
+-            continue
+-        if msg.error():
+-            if msg.error().code() == KafkaError._PARTITION_EOF:
+-                continue  # End of partition event
+-            else:
+-                print(msg.error())
+-                break
+-        # Convert the message from Kafka to a Python dictionary
+-        data = json.loads(msg.value().decode("utf-8"))
++
++def main():
++    try:
++        while True:
++            msg = consumer.poll(timeout=1.0)
++            if msg is None:
++                print("got nothing...")
++                continue
++            if msg.error():
++                if msg.error().code() == KafkaError._PARTITION_EOF:
++                    continue  # End of partition event
++                else:
++                    print(msg.error())
++                    break
++            # Convert the message from Kafka to a Python dictionary
++            data = json.loads(msg.value().decode("utf-8"))
+
+-        # Convert the dictionary back to a JSON string to print it
+-        json_data = json.dumps(data, indent=4)
+-        print(f"Received JSON data: {json_data}")
++            # Convert the dictionary back to a JSON string to print it
++            json_data = json.dumps(data, indent=4)
++            # print(f"Received JSON data: {json_data}")
+
+-        # Insert data into MongoDB
+-        # traffic_data.insert_one(data)
++            # Insert data into MongoDB
++            # traffic_data.insert_one(data)
+
+-except KeyboardInterrupt:
+-    print("Stopped by the user.")
++    except KeyboardInterrupt:
++        print("Stopped by the user.")
+
+-finally:
+-    # Close the consumer and MongoDB connection
+-    consumer.close()
++    finally:
++        # Close the consumer and MongoDB connection
++        consumer.close()
++
++
++if __name__ == '__main__':
++    main()
+Index: makefile
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>.PHONY: init frontend all clean test\r\n\r\n\r\ninit:\r\n\tpoetry install\r\n\tpre-commit install\r\n\r\nfrontend:\r\n\tpoetry run streamlit run yem/frontend/main.py --server.runOnSave true\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/makefile b/makefile
+--- a/makefile	(revision 8efad61980bfaa40f6d12178805a1398ea37f649)
++++ b/makefile	(date 1714243932000)
+@@ -6,4 +6,4 @@
+ 	pre-commit install
+
+ frontend:
+-	poetry run streamlit run yem/frontend/main.py --server.runOnSave true
++	poetry run streamlit run yem/frontend/main.py

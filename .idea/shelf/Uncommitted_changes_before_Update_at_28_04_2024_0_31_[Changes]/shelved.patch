@@ -1,0 +1,223 @@
+Index: yem/vehicle_tracker.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>import math\r\nfrom datetime import datetime\r\n\r\nfrom pydantic import MongoDsn\r\nfrom pymongo.collection import Collection\r\nimport pymongo\r\n\r\nfrom yem import models\r\n\r\n\r\nclass VehicleTracker:\r\n    def __init__(\r\n        self,\r\n        mongo_uri: str | MongoDsn = \"mongodb://localhost:27017/\",\r\n        database_name: str = \"vehicle_tracking\",\r\n        max_distance=2,\r\n        max_distance_new=5,\r\n        max_time_gap=0.2,\r\n        inactive_time_threshold=0.5,\r\n    ):\r\n        self.client = pymongo.MongoClient(str(mongo_uri))\r\n        self.db = self.client[database_name]\r\n        self.active_vehicles: Collection = self.db[\"active_vehicles\"]\r\n        self.passed_vehicles: Collection = self.db[\"passed_vehicles\"]\r\n        self.vehicle_id_counter = self.get_next_vehicle_id()\r\n        self.max_distance = max_distance\r\n        self.max_distance_new = max_distance_new\r\n        self.max_time_gap = max_time_gap\r\n        self.inactive_time_threshold = inactive_time_threshold\r\n\r\n    def get_next_vehicle_id(self):\r\n        \"\"\"Retrieve the next available vehicle ID from the database.\"\"\"\r\n        max_id = self.active_vehicles.find_one(\r\n            sort=[(\"vehicle_id\", -1)], projection={\"vehicle_id\": 1}\r\n        )\r\n        if max_id is None:\r\n            return 1\r\n        else:\r\n            return max_id[\"vehicle_id\"] + 1\r\n\r\n    @staticmethod\r\n    def extrapolate_position(\r\n        pos1: models.UTMPosition,\r\n        pos2: models.UTMPosition,\r\n        time1: datetime,\r\n        time2: datetime,\r\n        target_time: datetime,\r\n    ) -> models.UTMPosition:\r\n        \"\"\"Extrapolate the position at target_time given two positions and their times.\"\"\"\r\n        if time1 == time2:\r\n            return pos1  # Avoid division by zero if times are the same\r\n        ratio = (target_time - time1).total_seconds() / (time2 - time1).total_seconds()\r\n        new_y = pos1.northing + (pos2.northing - pos1.northing) * ratio\r\n        new_x = pos1.easting + (pos2.easting - pos1.easting) * ratio\r\n        return models.UTMPosition(northing=new_y, easting=new_x)\r\n\r\n    def add_message(self, data: models.TrafficMessage) -> None:\r\n        timestamp = data.timestamp.replace(tzinfo=None)\r\n        class_id = data.class_\r\n        best_id = None\r\n        min_time_distance = float(\"inf\")\r\n\r\n        # Modify vehicle data handling to use MongoDB queries\r\n        for vehicle_record in self.active_vehicles.find():\r\n            vehicle_data = models.TrackedVehicle(**vehicle_record)\r\n            vehicle_id = vehicle_data.vehicle_id\r\n            if (\r\n                timestamp - vehicle_data.last_update_time\r\n            ).total_seconds() > self.inactive_time_threshold:\r\n                self._move_to_passed(vehicle_data)\r\n                continue\r\n\r\n            for i, entry in enumerate(vehicle_data.vehicle_path):\r\n                time_diff = abs((entry.timestamp - timestamp).total_seconds())\r\n                if time_diff < self.max_time_gap:\r\n                    if i > 0:\r\n                        max_distance = self.max_distance\r\n                        prev_entry = vehicle_data.vehicle_path[i - 1]\r\n                        extrapolated_pos = self.extrapolate_position(\r\n                            prev_entry.position,\r\n                            entry.position,\r\n                            prev_entry.timestamp,\r\n                            entry.timestamp,\r\n                            timestamp,\r\n                        )\r\n                    else:\r\n                        extrapolated_pos = entry.position\r\n                        max_distance = self.max_distance_new\r\n\r\n                    dist = math.dist(extrapolated_pos, data.position)\r\n                    if time_diff < min_time_distance and dist < max_distance:\r\n                        min_time_distance = dist\r\n                        best_id = vehicle_id\r\n\r\n        # Create new vehicle record if no suitable track is found\r\n        if best_id is None:\r\n            best_id = self.vehicle_id_counter\r\n            self.active_vehicles.insert_one(\r\n                {\r\n                    \"vehicle_id\": best_id,\r\n                    \"vehicle_class\": class_id,\r\n                    \"vehicle_path\": [],\r\n                    \"status\": models.TrackedVehicleStatus.ACTIVE,\r\n                }\r\n            )\r\n            self.vehicle_id_counter += 1\r\n\r\n        # Append new position to the path of the identified vehicle\r\n        self.active_vehicles.update_one(\r\n            {\"vehicle_id\": best_id},\r\n            {\r\n                \"$push\": {\r\n                    \"vehicle_path\": {\"timestamp\": timestamp, \"position\": data.position}\r\n                }\r\n            },\r\n        )\r\n\r\n    def get_vehicle_data(\r\n        self, min_path_points=5, return_passed: bool = False\r\n    ) -> list[models.TrackedVehicle]:\r\n        result = []\r\n        for vehicle_record in self.active_vehicles.find():\r\n            vehicle_data = models.TrackedVehicle(**vehicle_record)\r\n            if (\r\n                datetime.utcnow() - vehicle_data.last_update_time\r\n            ).total_seconds() > self.inactive_time_threshold * 3:\r\n                self._move_to_passed(vehicle_data)\r\n                continue\r\n            if len(vehicle_data.vehicle_path) > min_path_points:\r\n                result.append(vehicle_data)\r\n        if return_passed:\r\n            for vehicle_data in self.passed_vehicles.find():\r\n                if len(vehicle_data[\"vehicle_path\"]) > min_path_points:\r\n                    result.append(models.TrackedVehicle(**vehicle_data))\r\n        return result\r\n\r\n    def _move_to_passed(self, vehicle_data: models.TrackedVehicle) -> None:\r\n        with self.client.start_session() as session:\r\n            with session.start_transaction():\r\n                self.passed_vehicles.insert_one(vehicle_data.model_dump())\r\n                self.active_vehicles.delete_one({\"vehicle_id\": vehicle_data.vehicle_id})\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/yem/vehicle_tracker.py b/yem/vehicle_tracker.py
+--- a/yem/vehicle_tracker.py	(revision decb867384b7df5a933ac6aa5086e99b323a04cd)
++++ b/yem/vehicle_tracker.py	(date 1714253226000)
+@@ -129,7 +129,7 @@
+             if len(vehicle_data.vehicle_path) > min_path_points:
+                 result.append(vehicle_data)
+         if return_passed:
+-            for vehicle_data in self.passed_vehicles.find():
++            for vehicle_data in self.passed_vehicles.find(limit=50):
+                 if len(vehicle_data["vehicle_path"]) > min_path_points:
+                     result.append(models.TrackedVehicle(**vehicle_data))
+         return result
+Index: yem/frontend/main.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>import time\r\n\r\nimport folium\r\nimport streamlit as st\r\nfrom streamlit_folium import st_folium\r\n\r\nfrom yem.consumer import tracker\r\nfrom yem.models import UTMPosition, TrackedVehicleStatus\r\n\r\npos = UTMPosition(easting=389884.6097074643, northing=6184918.59105394)\r\n\r\nvehicles = tracker.get_vehicle_data()\r\n\r\ndata = [\r\n    v.vehicle_path[-1].position.to_global_position()\r\n    for v in vehicles\r\n    if v.status == TrackedVehicleStatus.ACTIVE\r\n]\r\n\r\ndata = [(p.lat, p.lon) for p in data]\r\n\r\nst.sidebar.image(\"./static/logo.svg\")\r\nwith st.container(border=True):\r\n    st.image(\"https://upload.wikimedia.org/wikipedia/commons/f/fd/ABOBA.jpg\")\r\n\r\nZOOM = 0.001\r\n\r\nst.header(f\"Aboba {time.time()}\")\r\n# st.image(\"https://upload.wikimedia.org/wikipedia/commons/f/fd/ABOBA.jpg\")\r\n\r\nearth_map = folium.Map()\r\n\r\nfg = folium.FeatureGroup(name=\"Autobots\")\r\n\r\nROOT_VIEW = (55.79728057677817, 49.24356827846827)\r\n\r\nearth_map.fit_bounds(\r\n    [\r\n        (ROOT_VIEW[0] - ZOOM, ROOT_VIEW[1] - ZOOM),\r\n        (ROOT_VIEW[0] + ZOOM, ROOT_VIEW[1] + ZOOM),\r\n    ]\r\n)\r\n\r\nfor coords in data:\r\n    fg.add_child(folium.CircleMarker(coords, radius=3))\r\n\r\nst_folium(earth_map, feature_group_to_add=fg, height=700, width=700)\r\n\r\nif \"sleep_time\" not in st.session_state:\r\n    st.session_state.sleep_time = 2\r\n\r\nif \"auto_refresh\" not in st.session_state:\r\n    st.session_state.auto_refresh = True\r\n\r\nauto_refresh = st.sidebar.checkbox(\"Auto Refresh?\", st.session_state.auto_refresh)\r\n\r\nif auto_refresh:\r\n    number = st.sidebar.number_input(\r\n        \"Refresh rate in seconds\", value=st.session_state.sleep_time\r\n    )\r\n    st.session_state.sleep_time = number\r\n    time.sleep(number)\r\n    st.rerun()\r\n\r\n# st.write(styler)\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/yem/frontend/main.py b/yem/frontend/main.py
+--- a/yem/frontend/main.py	(revision decb867384b7df5a933ac6aa5086e99b323a04cd)
++++ b/yem/frontend/main.py	(date 1714253492000)
+@@ -2,22 +2,21 @@
+
+ import folium
+ import streamlit as st
++from folium import Icon
+ from streamlit_folium import st_folium
+
+ from yem.consumer import tracker
+-from yem.models import UTMPosition, TrackedVehicleStatus
++from yem.models import UTMPosition, TrackedVehicle, VEHICLE_TYPE_TO_ICON
+
+-pos = UTMPosition(easting=389884.6097074643, northing=6184918.59105394)
++start_pos = UTMPosition(easting=389860, northing=6184940)
+
+ vehicles = tracker.get_vehicle_data()
+
+ data = [
+-    v.vehicle_path[-1].position.to_global_position()
++    v
+     for v in vehicles
+-    if v.status == TrackedVehicleStatus.ACTIVE
++    # if v.status == TrackedVehicleStatus.ACTIVE
+ ]
+-
+-data = [(p.lat, p.lon) for p in data]
+
+ st.sidebar.image("./static/logo.svg")
+ with st.container(border=True):
+@@ -32,7 +31,8 @@
+
+ fg = folium.FeatureGroup(name="Autobots")
+
+-ROOT_VIEW = (55.79728057677817, 49.24356827846827)
++# ROOT_VIEW = (55.79728057677817, 49.24356827846827)
++ROOT_VIEW = start_pos.to_global_position()
+
+ earth_map.fit_bounds(
+     [
+@@ -41,8 +41,17 @@
+     ]
+ )
+
+-for coords in data:
+-    fg.add_child(folium.CircleMarker(coords, radius=3))
++
++def draw_icon(v: TrackedVehicle, loc):
++    icon = VEHICLE_TYPE_TO_ICON[v.vehicle_class]
++    fg.add_child(
++        folium.Marker(loc, icon=Icon(icon=icon, prefix="fa"))
++    )
++
++
++for vehicle in data:
++    coord = vehicle.vehicle_path[-1].position.to_global_position()
++    draw_icon(vehicle, coord)
+
+ st_folium(earth_map, feature_group_to_add=fg, height=700, width=700)
+
+Index: yem/models.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>import math\r\nfrom datetime import datetime\r\nfrom enum import IntEnum, StrEnum\r\nfrom typing import Annotated, NewType, NamedTuple\r\n\r\nfrom annotated_types import Ge, Le\r\nfrom pydantic import BaseModel, Field\r\n\r\nUTMCoordinate = Annotated[float, Ge(0)]\r\nVehicleID = NewType(\"VehicleID\", int)\r\n\r\n\r\nclass GlobalPosition(NamedTuple):\r\n    lat: Annotated[float, Ge(-90), Le(90)]\r\n    lon: Annotated[float, Ge(-180), Le(180)]\r\n\r\n\r\nclass UTMPosition(NamedTuple):\r\n    northing: UTMCoordinate\r\n    easting: UTMCoordinate\r\n\r\n    def to_global_position(\r\n        self, zone: int = 39, northern_hemisphere=True\r\n    ) -> GlobalPosition:\r\n        \"\"\"Source: https://stackoverflow.com/a/344083\"\"\"\r\n        northing = self.northing\r\n        easting = self.easting\r\n        if not northern_hemisphere:\r\n            northing = 10000000 - northing\r\n\r\n        a = 6378137\r\n        e = 0.081819191\r\n        e1sq = 0.006739497\r\n        k0 = 0.9996\r\n\r\n        arc = northing / k0\r\n        mu = arc / (\r\n            a\r\n            * (\r\n                1\r\n                - math.pow(e, 2) / 4.0\r\n                - 3 * math.pow(e, 4) / 64.0\r\n                - 5 * math.pow(e, 6) / 256.0\r\n            )\r\n        )\r\n\r\n        ei = (1 - math.pow((1 - e * e), (1 / 2.0))) / (\r\n            1 + math.pow((1 - e * e), (1 / 2.0))\r\n        )\r\n\r\n        ca = 3 * ei / 2 - 27 * math.pow(ei, 3) / 32.0\r\n\r\n        cb = 21 * math.pow(ei, 2) / 16 - 55 * math.pow(ei, 4) / 32\r\n        cc = 151 * math.pow(ei, 3) / 96\r\n        cd = 1097 * math.pow(ei, 4) / 512\r\n        phi1 = (\r\n            mu\r\n            + ca * math.sin(2 * mu)\r\n            + cb * math.sin(4 * mu)\r\n            + cc * math.sin(6 * mu)\r\n            + cd * math.sin(8 * mu)\r\n        )\r\n\r\n        n0 = a / math.pow((1 - math.pow((e * math.sin(phi1)), 2)), (1 / 2.0))\r\n\r\n        r0 = (\r\n            a\r\n            * (1 - e * e)\r\n            / math.pow((1 - math.pow((e * math.sin(phi1)), 2)), (3 / 2.0))\r\n        )\r\n        fact1 = n0 * math.tan(phi1) / r0\r\n\r\n        _a1 = 500000 - easting\r\n        dd0 = _a1 / (n0 * k0)\r\n        fact2 = dd0 * dd0 / 2\r\n\r\n        t0 = math.pow(math.tan(phi1), 2)\r\n        Q0 = e1sq * math.pow(math.cos(phi1), 2)\r\n        fact3 = (5 + 3 * t0 + 10 * Q0 - 4 * Q0 * Q0 - 9 * e1sq) * math.pow(dd0, 4) / 24\r\n\r\n        fact4 = (\r\n            (61 + 90 * t0 + 298 * Q0 + 45 * t0 * t0 - 252 * e1sq - 3 * Q0 * Q0)\r\n            * math.pow(dd0, 6)\r\n            / 720\r\n        )\r\n\r\n        lof1 = _a1 / (n0 * k0)\r\n        lof2 = (1 + 2 * t0 + Q0) * math.pow(dd0, 3) / 6.0\r\n        lof3 = (\r\n            (\r\n                5\r\n                - 2 * Q0\r\n                + 28 * t0\r\n                - 3 * math.pow(Q0, 2)\r\n                + 8 * e1sq\r\n                + 24 * math.pow(t0, 2)\r\n            )\r\n            * math.pow(dd0, 5)\r\n            / 120\r\n        )\r\n        _a2 = (lof1 - lof2 + lof3) / math.cos(phi1)\r\n        _a3 = _a2 * 180 / math.pi\r\n\r\n        latitude = 180 * (phi1 - fact1 * (fact2 + fact3 + fact4)) / math.pi\r\n\r\n        if not northern_hemisphere:\r\n            latitude = -latitude\r\n\r\n        longitude = ((zone > 0) and (6 * zone - 183.0) or 3.0) - _a3\r\n        return GlobalPosition(lat=latitude, lon=longitude)\r\n\r\n\r\nclass TrackedVehicleStatus(StrEnum):\r\n    ACTIVE = \"active\"\r\n    PASSED = \"passed\"\r\n\r\n\r\nclass VehicleType(IntEnum):\r\n    MOTORCYCLE = 0\r\n    CAR = 1\r\n    CAR_WITH_TRAILER = 2\r\n    TRUCK = 3\r\n    ROAD_TRAIN = 4\r\n    BUS = 5\r\n\r\n\r\nclass TrafficMessage(BaseModel):\r\n    timestamp: datetime = Field(alias=\"unix_millis\")\r\n    position: UTMPosition = Field(alias=\"center\")\r\n    class_: VehicleType = Field(alias=\"class\")\r\n\r\n\r\nclass TrackedPosition(BaseModel):\r\n    timestamp: datetime\r\n    position: UTMPosition\r\n\r\n\r\nclass TrackedVehicle(BaseModel):\r\n    vehicle_id: VehicleID\r\n    vehicle_class: VehicleType\r\n    vehicle_path: list[TrackedPosition]\r\n    status: TrackedVehicleStatus\r\n\r\n    @property\r\n    def last_update_time(self) -> datetime | None:\r\n        return self.vehicle_path[-1].timestamp if self.vehicle_path else None\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/yem/models.py b/yem/models.py
+--- a/yem/models.py	(revision decb867384b7df5a933ac6aa5086e99b323a04cd)
++++ b/yem/models.py	(date 1714252014000)
+@@ -1,6 +1,7 @@
+ import math
+ from datetime import datetime
+ from enum import IntEnum, StrEnum
++from types import MappingProxyType
+ from typing import Annotated, NewType, NamedTuple
+
+ from annotated_types import Ge, Le
+@@ -20,7 +21,7 @@
+     easting: UTMCoordinate
+
+     def to_global_position(
+-        self, zone: int = 39, northern_hemisphere=True
++            self, zone: int = 39, northern_hemisphere=True
+     ) -> GlobalPosition:
+         """Source: https://stackoverflow.com/a/344083"""
+         northing = self.northing
+@@ -35,17 +36,17 @@
+
+         arc = northing / k0
+         mu = arc / (
+-            a
+-            * (
+-                1
+-                - math.pow(e, 2) / 4.0
+-                - 3 * math.pow(e, 4) / 64.0
+-                - 5 * math.pow(e, 6) / 256.0
+-            )
++                a
++                * (
++                        1
++                        - math.pow(e, 2) / 4.0
++                        - 3 * math.pow(e, 4) / 64.0
++                        - 5 * math.pow(e, 6) / 256.0
++                )
+         )
+
+         ei = (1 - math.pow((1 - e * e), (1 / 2.0))) / (
+-            1 + math.pow((1 - e * e), (1 / 2.0))
++                1 + math.pow((1 - e * e), (1 / 2.0))
+         )
+
+         ca = 3 * ei / 2 - 27 * math.pow(ei, 3) / 32.0
+@@ -54,19 +55,19 @@
+         cc = 151 * math.pow(ei, 3) / 96
+         cd = 1097 * math.pow(ei, 4) / 512
+         phi1 = (
+-            mu
+-            + ca * math.sin(2 * mu)
+-            + cb * math.sin(4 * mu)
+-            + cc * math.sin(6 * mu)
+-            + cd * math.sin(8 * mu)
++                mu
++                + ca * math.sin(2 * mu)
++                + cb * math.sin(4 * mu)
++                + cc * math.sin(6 * mu)
++                + cd * math.sin(8 * mu)
+         )
+
+         n0 = a / math.pow((1 - math.pow((e * math.sin(phi1)), 2)), (1 / 2.0))
+
+         r0 = (
+-            a
+-            * (1 - e * e)
+-            / math.pow((1 - math.pow((e * math.sin(phi1)), 2)), (3 / 2.0))
++                a
++                * (1 - e * e)
++                / math.pow((1 - math.pow((e * math.sin(phi1)), 2)), (3 / 2.0))
+         )
+         fact1 = n0 * math.tan(phi1) / r0
+
+@@ -79,24 +80,24 @@
+         fact3 = (5 + 3 * t0 + 10 * Q0 - 4 * Q0 * Q0 - 9 * e1sq) * math.pow(dd0, 4) / 24
+
+         fact4 = (
+-            (61 + 90 * t0 + 298 * Q0 + 45 * t0 * t0 - 252 * e1sq - 3 * Q0 * Q0)
+-            * math.pow(dd0, 6)
+-            / 720
++                (61 + 90 * t0 + 298 * Q0 + 45 * t0 * t0 - 252 * e1sq - 3 * Q0 * Q0)
++                * math.pow(dd0, 6)
++                / 720
+         )
+
+         lof1 = _a1 / (n0 * k0)
+         lof2 = (1 + 2 * t0 + Q0) * math.pow(dd0, 3) / 6.0
+         lof3 = (
+-            (
+-                5
+-                - 2 * Q0
+-                + 28 * t0
+-                - 3 * math.pow(Q0, 2)
+-                + 8 * e1sq
+-                + 24 * math.pow(t0, 2)
+-            )
+-            * math.pow(dd0, 5)
+-            / 120
++                (
++                        5
++                        - 2 * Q0
++                        + 28 * t0
++                        - 3 * math.pow(Q0, 2)
++                        + 8 * e1sq
++                        + 24 * math.pow(t0, 2)
++                )
++                * math.pow(dd0, 5)
++                / 120
+         )
+         _a2 = (lof1 - lof2 + lof3) / math.cos(phi1)
+         _a3 = _a2 * 180 / math.pi
+@@ -124,6 +125,16 @@
+     BUS = 5
+
+
++VEHICLE_TYPE_TO_ICON = MappingProxyType({
++    VehicleType.MOTORCYCLE: "motorcycle",
++    VehicleType.CAR: "car",
++    VehicleType.CAR_WITH_TRAILER: "trailer",
++    VehicleType.TRUCK: "truck",
++    VehicleType.ROAD_TRAIN: "truck-moving",
++    VehicleType.BUS: "bus"
++})
++
++
+ class TrafficMessage(BaseModel):
+     timestamp: datetime = Field(alias="unix_millis")
+     position: UTMPosition = Field(alias="center")

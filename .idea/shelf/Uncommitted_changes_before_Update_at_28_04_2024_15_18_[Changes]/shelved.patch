@@ -1,0 +1,664 @@
+Index: docker-compose.yml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>services:\r\n  mongo:\r\n    image: mongo:latest\r\n    ports:\r\n      - \"27017:27017\"\r\n    volumes:\r\n      - mongo-db:/data/db\r\n\r\n  frontend:\r\n    build: .\r\n    command: [ \"make\", \"frontend\" ]\r\n    ports:\r\n      - \"8501:8501\"\r\n    depends_on:\r\n      - mongo\r\n    environment:\r\n      MONGO_URI: mongodb://mongo:27017\r\n\r\n  consumer:\r\n    build: .\r\n    command: [ \"make\", \"run-consumer\" ]\r\n    depends_on:\r\n      - mongo\r\n    environment:\r\n      MONGO_URI: mongodb://mongo:27017\r\n\r\nvolumes:\r\n  mongo-db: { }\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/docker-compose.yml b/docker-compose.yml
+--- a/docker-compose.yml	(revision 0a99aa2c356976d47f83fc4e9dc8c430a8d404dd)
++++ b/docker-compose.yml	(date 1714302570000)
+@@ -6,15 +6,15 @@
+     volumes:
+       - mongo-db:/data/db
+
+-  frontend:
+-    build: .
+-    command: [ "make", "frontend" ]
+-    ports:
+-      - "8501:8501"
+-    depends_on:
+-      - mongo
+-    environment:
+-      MONGO_URI: mongodb://mongo:27017
++#  frontend:
++#    build: .
++#    command: [ "make", "frontend" ]
++#    ports:
++#      - "8501:8501"
++#    depends_on:
++#      - mongo
++#    environment:
++#      MONGO_URI: mongodb://mongo:27017
+
+   consumer:
+     build: .
+@@ -23,6 +23,7 @@
+       - mongo
+     environment:
+       MONGO_URI: mongodb://mongo:27017
++    restart: unless-stopped
+
+ volumes:
+   mongo-db: { }
+Index: yem/frontend/main.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>import time\r\n\r\nimport folium\r\nimport streamlit as st\r\nfrom folium import Icon\r\nfrom streamlit_folium import st_folium\r\n\r\nfrom yem.consumer import tracker\r\nfrom yem.models import UTMPosition, TrackedVehicle, VEHICLE_TYPE_TO_ICON\r\n\r\nstart_pos = UTMPosition(easting=389860, northing=6184940)\r\n\r\nvehicles = tracker.get_vehicle_data(prune_old=True, return_passed=False)\r\n\r\ndata = [\r\n    v\r\n    for v in vehicles\r\n    # if v.status == TrackedVehicleStatus.ACTIVE\r\n]\r\n\r\nst.sidebar.image(\"./static/logo.svg\")\r\nwith st.container(border=True):\r\n    st.image(\"https://upload.wikimedia.org/wikipedia/commons/f/fd/ABOBA.jpg\")\r\n\r\nZOOM = 0.001\r\n\r\nst.header(f\"Aboba {time.time()}\")\r\n# st.image(\"https://upload.wikimedia.org/wikipedia/commons/f/fd/ABOBA.jpg\")\r\n\r\nearth_map = folium.Map()\r\n\r\nfg = folium.FeatureGroup(name=\"Autobots\")\r\n\r\n# ROOT_VIEW = (55.79728057677817, 49.24356827846827)\r\nROOT_VIEW = start_pos.to_global_position()\r\n\r\nearth_map.fit_bounds(\r\n    [\r\n        (ROOT_VIEW[0] - ZOOM, ROOT_VIEW[1] - ZOOM),\r\n        (ROOT_VIEW[0] + ZOOM, ROOT_VIEW[1] + ZOOM),\r\n    ]\r\n)\r\n\r\n\r\ndef draw_icon(v: TrackedVehicle, loc, paths_to_draw: int = 30):\r\n    icon = VEHICLE_TYPE_TO_ICON[v.vehicle_class]\r\n    colors = [\r\n        \"red\",\r\n        \"blue\",\r\n        \"green\",\r\n        \"purple\",\r\n        \"orange\",\r\n        \"darkred\",\r\n        \"lightred\",\r\n        \"beige\",\r\n        \"darkblue\",\r\n        \"darkgreen\",\r\n        \"cadetblue\",\r\n        \"darkpurple\",\r\n        \"pink\",\r\n        \"lightgreen\",\r\n        \"gray\",\r\n        \"black\",\r\n        \"lightgray\",\r\n    ]\r\n    color = colors[v.vehicle_id % len(colors)]\r\n    for i, path in enumerate(v.vehicle_path[-paths_to_draw:-1]):\r\n        opacity = float(i) / paths_to_draw\r\n        opacity = max(0.1, opacity)\r\n        opacity = min(1.0, opacity)\r\n\r\n        radius = (float(i) / float(paths_to_draw)) * 5\r\n        radius = max(1.0, radius)\r\n\r\n        fg.add_child(\r\n            folium.CircleMarker(\r\n                location=path.position.to_global_position(),\r\n                color=color,\r\n                radius=radius,\r\n                opacity=0,\r\n                fill=True,\r\n                fill_color=color,\r\n                fill_opacity=opacity / 2,\r\n            )\r\n        )\r\n    fg.add_child(folium.Marker(loc, icon=Icon(icon=icon, prefix=\"fa\", color=color)))\r\n\r\n\r\nfor vehicle in data:\r\n    coord = vehicle.vehicle_path[-1].position.to_global_position()\r\n    draw_icon(vehicle, coord)\r\n\r\nst_folium(earth_map, feature_group_to_add=fg, height=700, width=700)\r\n\r\nif \"sleep_time\" not in st.session_state:\r\n    st.session_state.sleep_time = 0.3\r\n\r\nif \"auto_refresh\" not in st.session_state:\r\n    st.session_state.auto_refresh = True\r\n\r\nauto_refresh = st.sidebar.checkbox(\"Auto Refresh?\", st.session_state.auto_refresh)\r\n\r\nif auto_refresh:\r\n    number = st.sidebar.number_input(\r\n        \"Refresh rate in seconds\", value=st.session_state.sleep_time\r\n    )\r\n    st.session_state.sleep_time = number\r\n    time.sleep(number)\r\n    st.rerun()\r\n\r\n# st.write(styler)\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/yem/frontend/main.py b/yem/frontend/main.py
+--- a/yem/frontend/main.py	(revision 0a99aa2c356976d47f83fc4e9dc8c430a8d404dd)
++++ b/yem/frontend/main.py	(date 1714306680000)
+@@ -6,30 +6,39 @@
+ from streamlit_folium import st_folium
+
+ from yem.consumer import tracker
+-from yem.models import UTMPosition, TrackedVehicle, VEHICLE_TYPE_TO_ICON
++from yem.models import UTMPosition, TrackedVehicle, VEHICLE_TYPE_TO_ICON, VehicleType, GlobalPosition
++
++start_pos = UTMPosition(easting=389865, northing=6184940)
++
++vehicles = tracker.get_vehicle_data()
++
+
+-start_pos = UTMPosition(easting=389860, northing=6184940)
++def draw_sidebar():
++    st.sidebar.image("./static/logo.png")
++    st.sidebar.text(" ")
+
+-vehicles = tracker.get_vehicle_data(prune_old=True, return_passed=False)
++    # c1, c2 = st.sidebar.columns(2)
++    # c1.time_input("From")
++    # c2.time_input("To")
+
+-data = [
+-    v
+-    for v in vehicles
+-    # if v.status == TrackedVehicleStatus.ACTIVE
+-]
++    car_types = st.sidebar.multiselect(
++        'Choose Car types:',
++        VehicleType.list())
++    return set(map(VehicleType.from_beautiful, car_types))
+
+-st.sidebar.image("./static/logo.svg")
++
++car_types = draw_sidebar()
+ with st.container(border=True):
+     st.image("https://upload.wikimedia.org/wikipedia/commons/f/fd/ABOBA.jpg")
+
+-ZOOM = 0.001
++ZOOM = 0.0005
+
+-st.header(f"Aboba {time.time()}")
++# st.header(f"Aboba {time.time()}")
+ # st.image("https://upload.wikimedia.org/wikipedia/commons/f/fd/ABOBA.jpg")
+
+ earth_map = folium.Map()
+
+-fg = folium.FeatureGroup(name="Autobots")
++fg = folium.FeatureGroup(name="Autobots", show=False)
+
+ # ROOT_VIEW = (55.79728057677817, 49.24356827846827)
+ ROOT_VIEW = start_pos.to_global_position()
+@@ -42,53 +51,64 @@
+ )
+
+
+-def draw_icon(v: TrackedVehicle, loc, paths_to_draw: int = 30):
++def append_diff(loc):
++    dx, dy = .00004, .000
++    return GlobalPosition(loc[0] + dx, loc[1] + dy)
++
++
++def draw_icon(v: TrackedVehicle, paths_to_draw: int = 30):
++    loc = vehicle.vehicle_path[-1].position.to_global_position()
++    loc = append_diff(loc)
+     icon = VEHICLE_TYPE_TO_ICON[v.vehicle_class]
+     colors = [
+-        "red",
+         "blue",
+         "green",
++        "red",
+         "purple",
+         "orange",
+-        "darkred",
+-        "lightred",
+-        "beige",
+         "darkblue",
+         "darkgreen",
+-        "cadetblue",
+-        "darkpurple",
+-        "pink",
+-        "lightgreen",
+-        "gray",
+-        "black",
+-        "lightgray",
+     ]
+     color = colors[v.vehicle_id % len(colors)]
+-    for i, path in enumerate(v.vehicle_path[-paths_to_draw:-1]):
+-        opacity = float(i) / paths_to_draw
+-        opacity = max(0.1, opacity)
+-        opacity = min(1.0, opacity)
++    line_coords = [loc]
++    for i, path in list(enumerate(v.vehicle_path[::3]))[-10:]:
++        # opacity = float(i) / paths_to_draw
++        # opacity = max(0.1, opacity)
++        # opacity = min(1.0, opacity)
++        #
++        # radius = (float(i) / float(paths_to_draw)) * 5
++        # radius = max(1.0, radius)
+
+-        radius = (float(i) / float(paths_to_draw)) * 5
+-        radius = max(1.0, radius)
+-
++        coord = path.position.to_global_position()
++        line_coords.append(append_diff(coord))
++        # fg.add_child(
++        #     folium.CircleMarker(
++        #         location=path.position.to_global_position(),
++        #         color=color,
++        #         radius=radius,
++        #         opacity=0,
++        #         fill=True,
++        #         fill_color=color,
++        #         fill_opacity=opacity / 2,
++        #     )
++        # )
++    # line_coords.append()
++    if len(line_coords) > 2:
+         fg.add_child(
+-            folium.CircleMarker(
+-                location=path.position.to_global_position(),
+-                color=color,
+-                radius=radius,
+-                opacity=0,
+-                fill=True,
+-                fill_color=color,
+-                fill_opacity=opacity / 2,
++            folium.ColorLine(
++                line_coords,
++                colors=range(len(line_coords) - 1),
++                colormap=[(1, 1, 1, 0), color],
++                weight=5,
++                opacity=0.5
+             )
+         )
+     fg.add_child(folium.Marker(loc, icon=Icon(icon=icon, prefix="fa", color=color)))
+
+
+-for vehicle in data:
+-    coord = vehicle.vehicle_path[-1].position.to_global_position()
+-    draw_icon(vehicle, coord)
++for vehicle in vehicles:
++    if vehicle.vehicle_class in car_types or len(car_types) == 0:
++        draw_icon(vehicle)
+
+ st_folium(earth_map, feature_group_to_add=fg, height=700, width=700)
+
+Index: yem/models.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>import math\r\nfrom datetime import datetime\r\nfrom enum import IntEnum, StrEnum\r\nfrom types import MappingProxyType\r\nfrom typing import Annotated, NewType, NamedTuple\r\n\r\nfrom annotated_types import Ge, Le\r\nfrom pydantic import BaseModel, Field\r\n\r\nUTMCoordinate = Annotated[float, Ge(0)]\r\nVehicleID = NewType(\"VehicleID\", int)\r\n\r\n\r\nclass GlobalPosition(NamedTuple):\r\n    lat: Annotated[float, Ge(-90), Le(90)]\r\n    lon: Annotated[float, Ge(-180), Le(180)]\r\n\r\n\r\nclass UTMPosition(NamedTuple):\r\n    northing: UTMCoordinate\r\n    easting: UTMCoordinate\r\n\r\n    def to_global_position(\r\n        self, zone: int = 39, northern_hemisphere=True\r\n    ) -> GlobalPosition:\r\n        \"\"\"Source: https://stackoverflow.com/a/344083\"\"\"\r\n        northing = self.northing\r\n        easting = self.easting\r\n        if not northern_hemisphere:\r\n            northing = 10000000 - northing\r\n\r\n        a = 6378137\r\n        e = 0.081819191\r\n        e1sq = 0.006739497\r\n        k0 = 0.9996\r\n\r\n        arc = northing / k0\r\n        mu = arc / (\r\n            a\r\n            * (\r\n                1\r\n                - math.pow(e, 2) / 4.0\r\n                - 3 * math.pow(e, 4) / 64.0\r\n                - 5 * math.pow(e, 6) / 256.0\r\n            )\r\n        )\r\n\r\n        ei = (1 - math.pow((1 - e * e), (1 / 2.0))) / (\r\n            1 + math.pow((1 - e * e), (1 / 2.0))\r\n        )\r\n\r\n        ca = 3 * ei / 2 - 27 * math.pow(ei, 3) / 32.0\r\n\r\n        cb = 21 * math.pow(ei, 2) / 16 - 55 * math.pow(ei, 4) / 32\r\n        cc = 151 * math.pow(ei, 3) / 96\r\n        cd = 1097 * math.pow(ei, 4) / 512\r\n        phi1 = (\r\n            mu\r\n            + ca * math.sin(2 * mu)\r\n            + cb * math.sin(4 * mu)\r\n            + cc * math.sin(6 * mu)\r\n            + cd * math.sin(8 * mu)\r\n        )\r\n\r\n        n0 = a / math.pow((1 - math.pow((e * math.sin(phi1)), 2)), (1 / 2.0))\r\n\r\n        r0 = (\r\n            a\r\n            * (1 - e * e)\r\n            / math.pow((1 - math.pow((e * math.sin(phi1)), 2)), (3 / 2.0))\r\n        )\r\n        fact1 = n0 * math.tan(phi1) / r0\r\n\r\n        _a1 = 500000 - easting\r\n        dd0 = _a1 / (n0 * k0)\r\n        fact2 = dd0 * dd0 / 2\r\n\r\n        t0 = math.pow(math.tan(phi1), 2)\r\n        Q0 = e1sq * math.pow(math.cos(phi1), 2)\r\n        fact3 = (5 + 3 * t0 + 10 * Q0 - 4 * Q0 * Q0 - 9 * e1sq) * math.pow(dd0, 4) / 24\r\n\r\n        fact4 = (\r\n            (61 + 90 * t0 + 298 * Q0 + 45 * t0 * t0 - 252 * e1sq - 3 * Q0 * Q0)\r\n            * math.pow(dd0, 6)\r\n            / 720\r\n        )\r\n\r\n        lof1 = _a1 / (n0 * k0)\r\n        lof2 = (1 + 2 * t0 + Q0) * math.pow(dd0, 3) / 6.0\r\n        lof3 = (\r\n            (\r\n                5\r\n                - 2 * Q0\r\n                + 28 * t0\r\n                - 3 * math.pow(Q0, 2)\r\n                + 8 * e1sq\r\n                + 24 * math.pow(t0, 2)\r\n            )\r\n            * math.pow(dd0, 5)\r\n            / 120\r\n        )\r\n        _a2 = (lof1 - lof2 + lof3) / math.cos(phi1)\r\n        _a3 = _a2 * 180 / math.pi\r\n\r\n        latitude = 180 * (phi1 - fact1 * (fact2 + fact3 + fact4)) / math.pi\r\n\r\n        if not northern_hemisphere:\r\n            latitude = -latitude\r\n\r\n        longitude = ((zone > 0) and (6 * zone - 183.0) or 3.0) - _a3\r\n        return GlobalPosition(lat=latitude, lon=longitude)\r\n\r\n\r\nclass TrackedVehicleStatus(StrEnum):\r\n    ACTIVE = \"active\"\r\n    PASSED = \"passed\"\r\n\r\n\r\nclass VehicleType(IntEnum):\r\n    MOTORCYCLE = 0\r\n    CAR = 1\r\n    CAR_WITH_TRAILER = 2\r\n    TRUCK = 3\r\n    ROAD_TRAIN = 4\r\n    BUS = 5\r\n\r\n\r\nVEHICLE_TYPE_TO_ICON = MappingProxyType(\r\n    {\r\n        VehicleType.MOTORCYCLE: \"motorcycle\",\r\n        VehicleType.CAR: \"car\",\r\n        VehicleType.CAR_WITH_TRAILER: \"trailer\",\r\n        VehicleType.TRUCK: \"truck\",\r\n        VehicleType.ROAD_TRAIN: \"truck-moving\",\r\n        VehicleType.BUS: \"bus\",\r\n    }\r\n)\r\n\r\n\r\nclass TrafficMessage(BaseModel):\r\n    timestamp: datetime = Field(alias=\"unix_millis\")\r\n    position: UTMPosition = Field(alias=\"center\")\r\n    class_: VehicleType = Field(alias=\"class\")\r\n\r\n\r\nclass TrackedPosition(BaseModel):\r\n    timestamp: datetime\r\n    position: UTMPosition\r\n\r\n\r\nclass JunctionInputLane(StrEnum):\r\n    EAST = \"east\"\r\n    WEST = \"west\"\r\n    SOUTH = \"south\"\r\n\r\n\r\nclass JunctionOutputLane(StrEnum):\r\n    EAST = \"east\"\r\n    WEST = \"west\"\r\n    SOUTH = \"south\"\r\n\r\n\r\nLANE_POINTS = {\r\n    UTMPosition(northing=6184968.86, easting=389909.58): \"east\",\r\n    UTMPosition(northing=6184928.33, easting=389821.43): \"west\",\r\n    UTMPosition(northing=6184908.56, easting=389885.40): \"south\",\r\n}\r\n\r\n\r\ndef nearest_lane(position: UTMPosition) -> str:\r\n    return LANE_POINTS[min(LANE_POINTS, key=lambda x: math.dist(x, position))]\r\n\r\n\r\nclass TrackedVehicle(BaseModel):\r\n    vehicle_id: VehicleID\r\n    vehicle_class: VehicleType\r\n    vehicle_path: list[TrackedPosition]\r\n    status: TrackedVehicleStatus\r\n    input_lane: JunctionInputLane | None = None\r\n    output_lane: JunctionOutputLane | None = None\r\n\r\n    @property\r\n    def last_update_time(self) -> datetime | None:\r\n        return self.vehicle_path[-1].timestamp if self.vehicle_path else None\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/yem/models.py b/yem/models.py
+--- a/yem/models.py	(revision 0a99aa2c356976d47f83fc4e9dc8c430a8d404dd)
++++ b/yem/models.py	(date 1714304536000)
+@@ -124,6 +124,18 @@
+     ROAD_TRAIN = 4
+     BUS = 5
+
++    def to_beautiful(self):
++        return self.name.replace("_", " ").lower().capitalize()
++
++    @classmethod
++    def from_beautiful(cls, name):
++        name = name.upper().replace(" ", "_")
++        return cls[name]
++
++    @classmethod
++    def list(cls):
++        return list(map(lambda a: a.to_beautiful(), cls))
++
+
+ VEHICLE_TYPE_TO_ICON = MappingProxyType(
+     {
+Index: static/logo.svg
+===================================================================
+diff --git a/static/logo.svg b/static/logo.svg
+deleted file mode 100644
+--- a/static/logo.svg	(revision 0a99aa2c356976d47f83fc4e9dc8c430a8d404dd)
++++ /dev/null	(revision 0a99aa2c356976d47f83fc4e9dc8c430a8d404dd)
+@@ -1,405 +0,0 @@
+-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+-<!-- Created with Inkscape (http://www.inkscape.org/) -->
+-
+-<svg
+-   width="255.68556mm"
+-   height="249.05511mm"
+-   viewBox="0 0 255.68556 249.05511"
+-   version="1.1"
+-   id="svg1"
+-   xmlns:xlink="http://www.w3.org/1999/xlink"
+-   xmlns="http://www.w3.org/2000/svg"
+-   xmlns:svg="http://www.w3.org/2000/svg">
+-  <defs
+-     id="defs1">
+-    <linearGradient
+-       id="linearGradient31">
+-      <stop
+-         style="stop-color:#00ff49;stop-opacity:1;"
+-         offset="0"
+-         id="stop32" />
+-      <stop
+-         style="stop-color:#ffff00;stop-opacity:1;"
+-         offset="1"
+-         id="stop33" />
+-    </linearGradient>
+-    <linearGradient
+-       xlink:href="#linearGradient31"
+-       id="linearGradient8"
+-       x1="31.718985"
+-       y1="139.3179"
+-       x2="171.74934"
+-       y2="139.3179"
+-       gradientUnits="userSpaceOnUse"
+-       gradientTransform="translate(0.86520569,25.770893)" />
+-    <linearGradient
+-       xlink:href="#linearGradient31"
+-       id="linearGradient33"
+-       x1="14.022923"
+-       y1="78.916214"
+-       x2="85.879936"
+-       y2="78.916214"
+-       gradientUnits="userSpaceOnUse" />
+-    <linearGradient
+-       xlink:href="#linearGradient31"
+-       id="linearGradient34"
+-       gradientUnits="userSpaceOnUse"
+-       x1="14.022923"
+-       y1="78.916214"
+-       x2="85.879936"
+-       y2="78.916214" />
+-    <linearGradient
+-       xlink:href="#linearGradient31"
+-       id="linearGradient35"
+-       gradientUnits="userSpaceOnUse"
+-       x1="14.022923"
+-       y1="78.916214"
+-       x2="85.879936"
+-       y2="78.916214" />
+-    <linearGradient
+-       xlink:href="#linearGradient31"
+-       id="linearGradient36"
+-       gradientUnits="userSpaceOnUse"
+-       x1="14.022923"
+-       y1="78.916214"
+-       x2="85.879936"
+-       y2="78.916214" />
+-    <linearGradient
+-       xlink:href="#linearGradient31"
+-       id="linearGradient37"
+-       gradientUnits="userSpaceOnUse"
+-       x1="14.022923"
+-       y1="78.916214"
+-       x2="85.879936"
+-       y2="78.916214" />
+-    <linearGradient
+-       xlink:href="#linearGradient31"
+-       id="linearGradient38"
+-       gradientUnits="userSpaceOnUse"
+-       x1="14.022923"
+-       y1="78.916214"
+-       x2="85.879936"
+-       y2="78.916214" />
+-    <linearGradient
+-       xlink:href="#linearGradient31"
+-       id="linearGradient39"
+-       gradientUnits="userSpaceOnUse"
+-       x1="14.022923"
+-       y1="78.916214"
+-       x2="85.879936"
+-       y2="78.916214" />
+-    <linearGradient
+-       xlink:href="#linearGradient31"
+-       id="linearGradient40"
+-       gradientUnits="userSpaceOnUse"
+-       x1="14.022923"
+-       y1="78.916214"
+-       x2="85.879936"
+-       y2="78.916214" />
+-    <linearGradient
+-       xlink:href="#linearGradient31"
+-       id="linearGradient41"
+-       gradientUnits="userSpaceOnUse"
+-       x1="14.022923"
+-       y1="78.916214"
+-       x2="85.879936"
+-       y2="78.916214" />
+-    <linearGradient
+-       xlink:href="#linearGradient31"
+-       id="linearGradient42"
+-       gradientUnits="userSpaceOnUse"
+-       x1="14.022923"
+-       y1="78.916214"
+-       x2="85.879936"
+-       y2="78.916214" />
+-    <linearGradient
+-       xlink:href="#linearGradient31"
+-       id="linearGradient43"
+-       gradientUnits="userSpaceOnUse"
+-       x1="14.022923"
+-       y1="78.916214"
+-       x2="85.879936"
+-       y2="78.916214" />
+-    <filter
+-       style="color-interpolation-filters:sRGB"
+-       id="filter43"
+-       x="-0.41433066"
+-       y="-0.61647391"
+-       width="1.8286613"
+-       height="2.2329478">
+-      <feGaussianBlur
+-         stdDeviation="12.405234"
+-         id="feGaussianBlur43" />
+-    </filter>
+-    <linearGradient
+-       xlink:href="#linearGradient31"
+-       id="linearGradient44"
+-       gradientUnits="userSpaceOnUse"
+-       gradientTransform="translate(0.86520569,25.770892)"
+-       x1="31.718985"
+-       y1="139.3179"
+-       x2="171.74934"
+-       y2="139.3179" />
+-    <filter
+-       style="color-interpolation-filters:sRGB"
+-       id="filter44"
+-       x="-0.26265179"
+-       y="-1.6402986"
+-       width="1.5253036"
+-       height="4.2805971">
+-      <feGaussianBlur
+-         stdDeviation="16.995269"
+-         id="feGaussianBlur44" />
+-    </filter>
+-    <linearGradient
+-       xlink:href="#linearGradient31"
+-       id="linearGradient45"
+-       gradientUnits="userSpaceOnUse"
+-       x1="14.022923"
+-       y1="78.916214"
+-       x2="85.879936"
+-       y2="78.916214" />
+-    <linearGradient
+-       xlink:href="#linearGradient31"
+-       id="linearGradient46"
+-       gradientUnits="userSpaceOnUse"
+-       x1="14.022923"
+-       y1="78.916214"
+-       x2="85.879936"
+-       y2="78.916214" />
+-    <linearGradient
+-       xlink:href="#linearGradient31"
+-       id="linearGradient47"
+-       gradientUnits="userSpaceOnUse"
+-       x1="14.022923"
+-       y1="78.916214"
+-       x2="85.879936"
+-       y2="78.916214" />
+-    <linearGradient
+-       xlink:href="#linearGradient31"
+-       id="linearGradient48"
+-       gradientUnits="userSpaceOnUse"
+-       x1="14.022923"
+-       y1="78.916214"
+-       x2="85.879936"
+-       y2="78.916214" />
+-    <linearGradient
+-       xlink:href="#linearGradient31"
+-       id="linearGradient49"
+-       gradientUnits="userSpaceOnUse"
+-       x1="14.022923"
+-       y1="78.916214"
+-       x2="85.879936"
+-       y2="78.916214" />
+-    <linearGradient
+-       xlink:href="#linearGradient31"
+-       id="linearGradient50"
+-       gradientUnits="userSpaceOnUse"
+-       x1="14.022923"
+-       y1="78.916214"
+-       x2="85.879936"
+-       y2="78.916214" />
+-    <linearGradient
+-       xlink:href="#linearGradient31"
+-       id="linearGradient51"
+-       gradientUnits="userSpaceOnUse"
+-       x1="14.022923"
+-       y1="78.916214"
+-       x2="85.879936"
+-       y2="78.916214" />
+-    <linearGradient
+-       xlink:href="#linearGradient31"
+-       id="linearGradient52"
+-       gradientUnits="userSpaceOnUse"
+-       x1="14.022923"
+-       y1="78.916214"
+-       x2="85.879936"
+-       y2="78.916214" />
+-    <linearGradient
+-       xlink:href="#linearGradient31"
+-       id="linearGradient53"
+-       gradientUnits="userSpaceOnUse"
+-       x1="14.022923"
+-       y1="78.916214"
+-       x2="85.879936"
+-       y2="78.916214" />
+-  </defs>
+-  <g
+-     id="layer1"
+-     transform="translate(22.842783,-10.592243)">
+-    <rect
+-       style="fill:#230c33;fill-opacity:1;stroke:none;stroke-width:5.99267;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none"
+-       id="rect9"
+-       width="255.68556"
+-       height="249.0551"
+-       x="-22.842783"
+-       y="10.592242"
+-       ry="4.8854117" />
+-    <g
+-       id="g1-8"
+-       style="mix-blend-mode:normal;fill:url(#linearGradient43);fill-opacity:1;stroke:none;stroke-width:3.7;stroke-dasharray:none;filter:url(#filter43)"
+-       transform="translate(19.120066,35.926117)">
+-      <rect
+-         style="fill:url(#linearGradient34);fill-opacity:1;stroke:none;stroke-width:3.7;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none"
+-         id="rect19-0"
+-         width="6.3391891"
+-         height="30.080751"
+-         x="14.022923"
+-         y="54.768749"
+-         ry="2.532733" />
+-      <rect
+-         style="fill:url(#linearGradient35);fill-opacity:1;stroke:none;stroke-width:3.7;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none"
+-         id="rect19-9-2"
+-         width="6.3391933"
+-         height="15.040376"
+-         x="14.022923"
+-         y="88.0233"
+-         ry="2.532733" />
+-      <rect
+-         style="fill:url(#linearGradient36);fill-opacity:1;stroke:none;stroke-width:3.7;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none"
+-         id="rect19-9-3-1"
+-         width="6.3391933"
+-         height="15.040376"
+-         x="24.135193"
+-         y="54.768749"
+-         ry="2.532733" />
+-      <rect
+-         style="fill:url(#linearGradient37);fill-opacity:1;stroke:none;stroke-width:3.7;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none"
+-         id="rect19-9-0-05"
+-         width="6.3391933"
+-         height="15.040376"
+-         x="34.247478"
+-         y="54.768749"
+-         ry="2.532733" />
+-      <rect
+-         style="fill:url(#linearGradient38);fill-opacity:1;stroke:none;stroke-width:3.7;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none"
+-         id="rect19-9-8-1"
+-         width="6.3391933"
+-         height="15.040376"
+-         x="44.359749"
+-         y="54.768749"
+-         ry="2.532733" />
+-      <rect
+-         style="fill:url(#linearGradient39);fill-opacity:1;stroke:none;stroke-width:3.7;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none"
+-         id="rect19-9-3-4-1"
+-         width="6.3391933"
+-         height="15.040376"
+-         x="59.316185"
+-         y="88.0233"
+-         ry="2.532733" />
+-      <rect
+-         style="fill:url(#linearGradient40);fill-opacity:1;stroke:none;stroke-width:3.7;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none"
+-         id="rect19-9-0-0-0"
+-         width="6.3391933"
+-         height="15.040376"
+-         x="69.428452"
+-         y="88.0233"
+-         ry="2.532733" />
+-      <rect
+-         style="fill:url(#linearGradient41);fill-opacity:1;stroke:none;stroke-width:3.7;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none"
+-         id="rect19-9-8-5-8"
+-         width="6.3391933"
+-         height="15.040376"
+-         x="79.540741"
+-         y="88.0233"
+-         ry="2.532733" />
+-      <path
+-         style="fill:url(#linearGradient42);fill-opacity:1;stroke:none;stroke-width:3.7;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none"
+-         d="M 26.225569,95.543488 34.618748,78.455913 53.452887,90.967514 77.920884,60.488218"
+-         id="path22-5" />
+-    </g>
+-    <g
+-       id="g1"
+-       style="fill:url(#linearGradient33);stroke:none;stroke-width:3.7;stroke-dasharray:none"
+-       transform="translate(19.120066,35.926117)">
+-      <rect
+-         style="fill:url(#linearGradient45);fill-opacity:1;stroke:none;stroke-width:3.7;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none"
+-         id="rect19"
+-         width="6.3391891"
+-         height="30.080751"
+-         x="14.022923"
+-         y="54.768749"
+-         ry="2.532733" />
+-      <rect
+-         style="fill:url(#linearGradient46);fill-opacity:1;stroke:none;stroke-width:3.7;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none"
+-         id="rect19-9"
+-         width="6.3391933"
+-         height="15.040376"
+-         x="14.022923"
+-         y="88.0233"
+-         ry="2.532733" />
+-      <rect
+-         style="fill:url(#linearGradient47);fill-opacity:1;stroke:none;stroke-width:3.7;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none"
+-         id="rect19-9-3"
+-         width="6.3391933"
+-         height="15.040376"
+-         x="24.135193"
+-         y="54.768749"
+-         ry="2.532733" />
+-      <rect
+-         style="fill:url(#linearGradient48);fill-opacity:1;stroke:none;stroke-width:3.7;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none"
+-         id="rect19-9-0"
+-         width="6.3391933"
+-         height="15.040376"
+-         x="34.247478"
+-         y="54.768749"
+-         ry="2.532733" />
+-      <rect
+-         style="fill:url(#linearGradient49);fill-opacity:1;stroke:none;stroke-width:3.7;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none"
+-         id="rect19-9-8"
+-         width="6.3391933"
+-         height="15.040376"
+-         x="44.359749"
+-         y="54.768749"
+-         ry="2.532733" />
+-      <rect
+-         style="fill:url(#linearGradient50);fill-opacity:1;stroke:none;stroke-width:3.7;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none"
+-         id="rect19-9-3-4"
+-         width="6.3391933"
+-         height="15.040376"
+-         x="59.316185"
+-         y="88.0233"
+-         ry="2.532733" />
+-      <rect
+-         style="fill:url(#linearGradient51);fill-opacity:1;stroke:none;stroke-width:3.7;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none"
+-         id="rect19-9-0-0"
+-         width="6.3391933"
+-         height="15.040376"
+-         x="69.428452"
+-         y="88.0233"
+-         ry="2.532733" />
+-      <rect
+-         style="fill:url(#linearGradient52);fill-opacity:1;stroke:none;stroke-width:3.7;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none"
+-         id="rect19-9-8-5"
+-         width="6.3391933"
+-         height="15.040376"
+-         x="79.540741"
+-         y="88.0233"
+-         ry="2.532733" />
+-      <path
+-         style="fill:url(#linearGradient53);fill-opacity:1;stroke:none;stroke-width:3.7;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none"
+-         d="M 26.225569,95.543488 34.618748,78.455913 53.452887,90.967514 77.920884,60.488218"
+-         id="path22" />
+-    </g>
+-    <text
+-       xml:space="preserve"
+-       style="font-style:oblique;font-weight:600;font-size:25.4px;line-height:0.6;font-family:'URW Gothic';-inkscape-font-specification:'URW Gothic Semi-Bold Oblique';mix-blend-mode:normal;fill:url(#linearGradient44);stroke:none;stroke-width:3.70001;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;filter:url(#filter44)"
+-       x="31.33959"
+-       y="174.27089"
+-       id="text6-5"><tspan
+-         id="tspan6-8"
+-         style="font-style:normal;font-variant:normal;font-weight:800;font-stretch:normal;font-family:Cantarell;-inkscape-font-specification:'Cantarell Ultra-Bold';fill:url(#linearGradient44);stroke-width:3.7"
+-         x="31.33959"
+-         y="174.27089">ЙЕЕ! ЭЭЭМ...</tspan></text>
+-    <text
+-       xml:space="preserve"
+-       style="font-style:oblique;font-weight:600;font-size:25.4px;line-height:0.6;font-family:'URW Gothic';-inkscape-font-specification:'URW Gothic Semi-Bold Oblique';fill:url(#linearGradient8);stroke:none;stroke-width:3.70001;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none"
+-       x="31.33959"
+-       y="174.27089"
+-       id="text6"><tspan
+-         id="tspan6"
+-         style="font-style:normal;font-variant:normal;font-weight:800;font-stretch:normal;font-family:Cantarell;-inkscape-font-specification:'Cantarell Ultra-Bold';fill:url(#linearGradient8);stroke-width:3.7"
+-         x="31.33959"
+-         y="174.27089">ЙЕЕ! ЭЭЭМ...</tspan></text>
+-  </g>
+-</svg>
+Index: yem/settings/kafka.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>from pydantic_settings import BaseSettings, SettingsConfigDict\r\n\r\n\r\nclass KafkaSettings(BaseSettings):\r\n    server: str = \"hack.invian.ru:9094\"\r\n    group_id: str = \"yem\"\r\n\r\n    model_config = SettingsConfigDict(env_file=\".env\", env_prefix=\"KAFKA_\")\r\n\r\n    def get_config(self) -> dict[str, str]:\r\n        return {\r\n            \"bootstrap.servers\": self.server,\r\n            \"group.id\": self.group_id,\r\n            # \"auto.offset.reset\": \"earliest\",\r\n            \"session.timeout.ms\": \"10000\",  # 10 seconds\r\n        }\r\n\r\n\r\nkafka_settings = KafkaSettings()\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/yem/settings/kafka.py b/yem/settings/kafka.py
+--- a/yem/settings/kafka.py	(revision 0a99aa2c356976d47f83fc4e9dc8c430a8d404dd)
++++ b/yem/settings/kafka.py	(date 1714301328000)
+@@ -1,9 +1,11 @@
++import random
++
+ from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+ class KafkaSettings(BaseSettings):
+     server: str = "hack.invian.ru:9094"
+-    group_id: str = "yem"
++    group_id: str = f"yem{random.randint(1, 10**10)}"
+
+     model_config = SettingsConfigDict(env_file=".env", env_prefix="KAFKA_")
+
