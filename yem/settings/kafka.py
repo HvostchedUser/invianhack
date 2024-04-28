@@ -12,6 +12,7 @@ class KafkaSettings(BaseSettings):
             "bootstrap.servers": self.server,
             "group.id": self.group_id,
             "auto.offset.reset": "earliest",
+            "session.timeout.ms": "10000",  # 10 seconds
         }
 
 

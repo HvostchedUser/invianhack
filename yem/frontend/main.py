@@ -10,7 +10,7 @@ from yem.models import UTMPosition, TrackedVehicle, VEHICLE_TYPE_TO_ICON
 
 start_pos = UTMPosition(easting=389860, northing=6184940)
 
-vehicles = tracker.get_vehicle_data(prune_old=True, return_passed=True)
+vehicles = tracker.get_vehicle_data(prune_old=False, return_passed=True)
 
 data = [
     v
@@ -93,7 +93,7 @@ for vehicle in data:
 st_folium(earth_map, feature_group_to_add=fg, height=700, width=700)
 
 if "sleep_time" not in st.session_state:
-    st.session_state.sleep_time = 2
+    st.session_state.sleep_time = 0.3
 
 if "auto_refresh" not in st.session_state:
     st.session_state.auto_refresh = True

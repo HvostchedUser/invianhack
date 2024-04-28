@@ -1,4 +1,5 @@
 import logging
+import uuid
 
 from confluent_kafka import Consumer, KafkaError
 import json
@@ -12,6 +13,7 @@ tracker = VehicleTracker(
 )
 
 # Configuration for Kafka Consumer
+kafka_settings.group_id = str(uuid.uuid4())
 kafka_config = kafka_settings.get_config()
 
 # Create Kafka consumer
