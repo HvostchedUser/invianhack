@@ -148,11 +148,25 @@ class TrackedPosition(BaseModel):
     position: UTMPosition
 
 
+class JunctionInputLane(StrEnum):
+    EAST = "east"
+    WEST = "west"
+    SOUTH = "south"
+
+
+class JunctionOutputLane(StrEnum):
+    EAST = "east"
+    WEST = "west"
+    SOUTH = "south"
+
+
 class TrackedVehicle(BaseModel):
     vehicle_id: VehicleID
     vehicle_class: VehicleType
     vehicle_path: list[TrackedPosition]
     status: TrackedVehicleStatus
+    input_lane: JunctionInputLane | None = None
+    output_lane: JunctionOutputLane | None = None
 
     @property
     def last_update_time(self) -> datetime | None:
