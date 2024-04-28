@@ -5,7 +5,6 @@
 
 ## Overview
 ![изображение](https://github.com/HvostchedUser/invianhack/assets/42430176/8da2955c-694b-4c59-8258-ce8d47cafc7f)
-![Uploading Снимок экрана от 2024-04-27 15-54-04.png…]()
 
 This project is developed for a hackathon and is aimed at improving traffic management and analysis at intersections. Using camera feeds, the system detects various types of vehicles (buses, cars, motorcycles, etc.) and tracks their movements across frames. Key metrics such as average velocity and total count for each vehicle type on every road are computed. The system visualizes this data through detailed maps that show the paths of vehicles, their average speeds, and a bar chart representation of traffic volume by vehicle type for each road.
 
@@ -17,6 +16,7 @@ This project is developed for a hackathon and is aimed at improving traffic mana
 - **Vehicle Tracking**: Unique tracking of each vehicle across frames to monitor its path and behavior.
 - **Data Analysis**: Calculate average speeds and total counts of each vehicle type per road.
 - **Visualization**: Dynamic visual representation of the traffic, including vehicle paths, speed metrics, and summary bar charts.
+![Снимок экрана от 2024-04-27 15-54-04](https://github.com/HvostchedUser/invianhack/assets/42430176/a7ede1b9-a5ff-43b8-8897-e2c31fc3fe63)
 
 ## Installation
 
