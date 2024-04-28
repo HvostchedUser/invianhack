@@ -1,7 +1,7 @@
 import math
 from datetime import datetime
 
-from pydantic import MongoDsn
+from pydantic import MongoDsn, parse_obj_as
 from pymongo.collection import Collection
 import pymongo
 
@@ -37,6 +37,25 @@ class VehicleTracker:
             return 1
         else:
             return max_id["vehicle_id"] + 1
+
+    def get_latest_timestamp(self) -> datetime:
+        """Retrieve the latest timestamp from the database."""
+        pipeline = [
+            {"$unwind": "$vehicle_path"},  # Deconstruct the vehicle_path array
+            {
+                "$group": {
+                    "_id": "$vehicle_id",  # Group by vehicle_id
+                    "latest_timestamp": {
+                        "$max": "$vehicle_path.timestamp"
+                    },  # Find the max timestamp
+                }
+            },
+            {"$sort": {"latest_timestamp": -1}},
+            # Sort by latest_timestamp in descending order (newest first)
+            {"$limit": 1},  # Limit to the latest entry
+        ]
+        result = list(self.active_vehicles.aggregate(pipeline))
+        return parse_obj_as(datetime, result[0]["latest_timestamp"])
 
     @staticmethod
     def extrapolate_position(
@@ -127,7 +146,9 @@ class VehicleTracker:
             if (
                 prune_old
                 and vehicle_data.last_update_time is not None
-                and (datetime.utcnow() - vehicle_data.last_update_time).total_seconds()
+                and (
+                    self.get_latest_timestamp() - vehicle_data.last_update_time
+                ).total_seconds()
                 > self.inactive_time_threshold * 10
             ):
                 self._move_to_passed(vehicle_data)

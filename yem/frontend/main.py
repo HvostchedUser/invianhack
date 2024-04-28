@@ -10,7 +10,7 @@ from yem.models import UTMPosition, TrackedVehicle, VEHICLE_TYPE_TO_ICON
 
 start_pos = UTMPosition(easting=389860, northing=6184940)
 
-vehicles = tracker.get_vehicle_data(prune_old=False, return_passed=True)
+vehicles = tracker.get_vehicle_data(prune_old=True, return_passed=False)
 
 data = [
     v
